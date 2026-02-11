@@ -1,0 +1,14 @@
+# Copy this file to .envrc and fill in your values
+# Then run `direnv allow` to load the environment variables
+
+# Database Configuration (dev uses defaults from config/dev.exs)
+# export DATABASE_URL="ecto://postgres:postgres@localhost/pokevestment_dev"
+
+# Pokemon TCG API Key (optional, but recommended for higher rate limits)
+# Register at https://pokemontcg.io to get an API key
+export POKEMON_TCG_API_KEY=""
+
+# Production only (uncomment for production deployment)
+# export SECRET_KEY_BASE=""
+# export PHX_HOST="your-domain.com"
+# export PORT="4000"
