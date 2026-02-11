@@ -1,0 +1,124 @@
+{
+  "api_info": {
+    "name": "Pokemon TCG API",
+    "base_url": "https://api.pokemontcg.io/v2",
+    "documentation": "https://pokemontcg.io/",
+    "authentication": "Optional API key for higher rate limits",
+    "tested_date": "2026-02-11"
+  },
+  "statistics": {
+    "total_cards": 20113,
+    "total_sets": 171,
+    "total_rarities": 38,
+    "total_types": 11
+  },
+  "sample_card_base_set_charizard": {
+    "id": "base1-4",
+    "name": "Charizard",
+    "supertype": "Pokémon",
+    "subtypes": ["Stage 2"],
+    "hp": "120",
+    "types": ["Fire"],
+    "evolvesFrom": "Charmeleon",
+    "artist": "Mitsuhiro Arita",
+    "rarity": "Rare Holo",
+    "nationalPokedexNumbers": [6],
+    "set": {
+      "id": "base1",
+      "name": "Base",
+      "series": "Base",
+      "releaseDate": "1999/01/09"
+    },
+    "tcgplayer": {
+      "url": "https://prices.pokemontcg.io/tcgplayer/base1-4",
+      "updatedAt": "2026/02/10",
+      "prices": {
+        "holofoil": {
+          "low": 350.0,
+          "mid": 659.99,
+          "high": 1500.0,
+          "market": 468.87,
+          "directLow": 1299.98
+        }
+      }
+    },
+    "cardmarket": {
+      "url": "https://prices.pokemontcg.io/cardmarket/base1-4",
+      "updatedAt": "2026/02/10",
+      "prices": {
+        "averageSellPrice": 1321.25,
+        "lowPrice": 475.0,
+        "trendPrice": 876.51,
+        "avg1": 880.0,
+        "avg7": 1430.0,
+        "avg30": 2427.43
+      }
+    }
+  },
+  "available_rarities": [
+    "ACE SPEC Rare",
+    "Amazing Rare",
+    "Black White Rare",
+    "Classic Collection",
+    "Common",
+    "Double Rare",
+    "Hyper Rare",
+    "Illustration Rare",
+    "LEGEND",
+    "Promo",
+    "Radiant Rare",
+    "Rare",
+    "Rare BREAK",
+    "Rare Holo",
+    "Rare Holo EX",
+    "Rare Holo GX",
+    "Rare Holo LV.X",
+    "Rare Holo Star",
+    "Rare Holo V",
+    "Rare Holo VMAX",
+    "Rare Holo VSTAR",
+    "Rare Prime",
+    "Rare Prism Star",
+    "Rare Rainbow",
+    "Rare Secret",
+    "Rare Shining",
+    "Rare Shiny",
+    "Rare Shiny GX",
+    "Rare Ultra",
+    "Shiny Rare",
+    "Shiny Ultra Rare",
+    "Special Illustration Rare",
+    "Trainer Gallery Rare Holo",
+    "Ultra Rare",
+    "Uncommon"
+  ],
+  "available_types": [
+    "Colorless",
+    "Darkness",
+    "Dragon",
+    "Fairy",
+    "Fighting",
+    "Fire",
+    "Grass",
+    "Lightning",
+    "Metal",
+    "Psychic",
+    "Water"
+  ],
+  "artist_search_example": {
+    "query": "q=artist:HYOGONOSUKE",
+    "results": [
+      {"id": "swsh2-5", "name": "Shuckle", "artist": "HYOGONOSUKE", "set": "Rebel Clash"},
+      {"id": "swsh3-11", "name": "Rowlet", "artist": "HYOGONOSUKE", "set": "Darkness Ablaze"},
+      {"id": "sm9-23", "name": "Squirtle", "artist": "HYOGONOSUKE", "set": "Team Up"}
+    ]
+  },
+  "key_findings": {
+    "pricing_included": true,
+    "artist_field_available": true,
+    "historical_prices": "avg1, avg7, avg30 available from CardMarket",
+    "tcgplayer_prices": "low, mid, high, market available",
+    "rate_limiting": "Active - 504 errors on rapid requests without API key",
+    "card_variants": "holofoil, reverseHolofoil, normal tracked separately"
+  }
+}
