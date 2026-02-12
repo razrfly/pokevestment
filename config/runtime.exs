@@ -21,7 +21,7 @@ if System.get_env("PHX_SERVER") do
 end
 
 config :pokevestment, PokevestmentWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+  http: [port: String.to_integer(System.get_env("PORT", "4006"))]
 
 # Pokemon TCG API configuration
 # API key is optional for basic usage but recommended for higher rate limits

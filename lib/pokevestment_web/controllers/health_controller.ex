@@ -29,9 +29,12 @@ defmodule PokevestmentWeb.HealthController do
   end
 
   defp check_oban do
-    case Process.whereis(Oban) do
-      nil -> "not_running"
-      _pid -> "ok"
+    # Check if Oban is running by checking its config
+    case Oban.config() do
+      %Oban.Config{} -> "ok"
+      _ -> "not_configured"
     end
+  rescue
+    _ -> "not_running"
   end
 end
