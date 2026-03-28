@@ -4,6 +4,8 @@ defmodule Pokevestment.Ingestion.Transformer do
   No database access — all functions are side-effect free.
   """
 
+  alias Pokevestment.Ingestion.FeatureExtractor
+
   @generation_ranges [
     {1, 1, 151},
     {2, 152, 251},
@@ -140,6 +142,18 @@ defmodule Pokevestment.Ingestion.Transformer do
       metadata: card_raw
     }
 
+    features =
+      FeatureExtractor.compute_features(%{
+        attacks: card_raw["attacks"],
+        abilities: card_raw["abilities"],
+        weaknesses: card_raw["weaknesses"],
+        resistances: card_raw["resistances"],
+        variants: card_raw["variants"],
+        variants_detailed: card_raw["variants_detailed"]
+      })
+
+    card = Map.merge(card, features)
+
     card_type_attrs =
       types |> Enum.uniq() |> Enum.map(fn type -> %{card_id: card_id, type_name: type} end)
 
@@ -152,9 +166,10 @@ defmodule Pokevestment.Ingestion.Transformer do
 
   # --- Price Snapshot Builders ---
 
-  defp build_price_snapshots(_card_id, nil), do: []
+  @doc "Build price snapshot attr maps from a card's pricing data. Returns [] if nil."
+  def build_price_snapshots(_card_id, nil), do: []
 
-  defp build_price_snapshots(card_id, pricing) do
+  def build_price_snapshots(card_id, pricing) do
     today = Date.utc_today()
 
     build_tcgplayer_snapshots(card_id, pricing["tcgplayer"], today) ++

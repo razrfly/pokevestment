@@ -46,8 +46,8 @@ config :pokevestment, Oban,
     # Cron-based scheduled jobs (configured per environment)
     {Oban.Plugins.Cron,
      crontab: [
-       # Daily price sync at 2 AM UTC
-       {"0 2 * * *", Pokevestment.Workers.DailyPriceSync, queue: :ingestion}
+       # Daily price sync at 6 AM UTC
+       {"0 6 * * *", Pokevestment.Workers.DailyPriceSync, queue: :ingestion}
      ]}
   ]
 
