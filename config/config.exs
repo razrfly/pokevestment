@@ -30,12 +30,6 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-# Configure Tesla HTTP client
-config :tesla,
-  adapter: Tesla.Adapter.Hackney,
-  # Silence deprecation warning for `use Tesla` (will migrate when major version releases)
-  disable_deprecated_builder_warning: true
-
 # Configure Oban for background job processing
 config :pokevestment, Oban,
   repo: Pokevestment.Repo,
