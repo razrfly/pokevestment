@@ -36,7 +36,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
       {snapshots_inserted, failed} =
         card_ids
         |> Task.async_stream(
-          fn card_id -> sync_card(card_id) end,
+          fn card_id -> {card_id, sync_card(card_id)} end,
           max_concurrency: 10,
           timeout: 120_000,
           ordered: false
@@ -53,13 +53,14 @@ defmodule Pokevestment.Ingestion.PriceSync do
           end
 
           case result do
-            {:ok, {:ok, count}} ->
+            {:ok, {_card_id, {:ok, count}}} ->
               {inserted + count, failed_ids}
 
-            {:ok, {:error, card_id, _reason}} ->
+            {:ok, {card_id, {:error, _card_id, _reason}}} ->
               {inserted, [card_id | failed_ids]}
 
-            {:exit, _reason} ->
+            {:exit, reason} ->
+              Logger.warning("PriceSync: task exited: #{inspect(reason)}")
               {inserted, failed_ids}
           end
         end)
@@ -101,18 +102,23 @@ defmodule Pokevestment.Ingestion.PriceSync do
     end
   end
 
+  defp insert_snapshots([]), do: 0
+
   defp insert_snapshots(snapshots) do
-    Enum.reduce(snapshots, 0, fn attrs, acc ->
-      case %PriceSnapshot{}
-           |> PriceSnapshot.changeset(attrs)
-           |> Repo.insert(
-             on_conflict: :nothing,
-             conflict_target: [:card_id, :source, :variant, :snapshot_date]
-           ) do
-        {:ok, %{id: id}} when not is_nil(id) -> acc + 1
-        _ -> acc
-      end
-    end)
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    rows =
+      Enum.map(snapshots, fn attrs ->
+        Map.merge(attrs, %{inserted_at: now})
+      end)
+
+    {count, _} =
+      Repo.insert_all(PriceSnapshot, rows,
+        on_conflict: :nothing,
+        conflict_target: [:card_id, :source, :variant, :snapshot_date]
+      )
+
+    count
   end
 
   defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"

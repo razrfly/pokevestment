@@ -48,6 +48,8 @@ defmodule Pokevestment.Ingestion.FeatureExtractor do
   """
   def parse_damage(%{"damage" => damage}), do: parse_damage_value(damage)
   def parse_damage(%{damage: damage}), do: parse_damage_value(damage)
+  def parse_damage(val) when is_binary(val), do: parse_damage_value(val)
+  def parse_damage(val) when is_integer(val), do: val
   def parse_damage(_), do: nil
 
   defp parse_damage_value(nil), do: nil
@@ -67,16 +69,15 @@ defmodule Pokevestment.Ingestion.FeatureExtractor do
   defp first_edition?(_), do: false
 
   defp has_subtype?(variants_detailed, subtype) do
-    Enum.any?(variants_detailed, fn
-      %{"subtype" => ^subtype} -> true
-      _ -> false
+    Enum.any?(variants_detailed, fn variant ->
+      (Map.get(variant, "subtype") || Map.get(variant, :subtype)) == subtype
     end)
   end
 
   defp has_stamp?(variants_detailed, stamp) do
-    Enum.any?(variants_detailed, fn
-      %{"stamp" => stamps} when is_list(stamps) -> stamp in stamps
-      _ -> false
+    Enum.any?(variants_detailed, fn variant ->
+      stamps = Map.get(variant, "stamp") || Map.get(variant, :stamp)
+      is_list(stamps) and stamp in stamps
     end)
   end
 
