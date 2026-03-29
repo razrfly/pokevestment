@@ -6,6 +6,7 @@ defmodule Pokevestment.Api.Tcgdex do
   """
 
   @base_url "https://api.tcgdex.net/v2/en"
+  @req_opts [retry: :transient, max_retries: 3]
 
   @doc "List all series (~21 items)."
   def list_series, do: client() |> Req.get(url: "/series") |> handle_response()
@@ -34,22 +35,14 @@ defmodule Pokevestment.Api.Tcgdex do
   """
   def list_cards_for_language(lang) when lang in @languages do
     Req.new(
-      base_url: "https://api.tcgdex.net/v2/#{lang}",
-      retry: :transient,
-      max_retries: 3,
-      receive_timeout: 60_000
+      [base_url: "https://api.tcgdex.net/v2/#{lang}", receive_timeout: 60_000] ++ @req_opts
     )
     |> Req.get(url: "/cards")
     |> handle_response()
   end
 
   defp client do
-    Req.new(
-      base_url: @base_url,
-      retry: :transient,
-      max_retries: 3,
-      receive_timeout: 30_000
-    )
+    Req.new([base_url: @base_url, receive_timeout: 30_000] ++ @req_opts)
   end
 
   defp handle_response({:ok, %Req.Response{status: status, body: body}})
