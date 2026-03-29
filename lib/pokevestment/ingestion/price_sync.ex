@@ -20,7 +20,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
   Returns `{:ok, summary}` or `{:error, reason}`.
 
-  Summary keys: `:total`, `:processed`, `:snapshots_inserted`, `:failed`, `:elapsed_ms`.
+  Summary keys: `:total`, `:processed`, `:snapshots_inserted`, `:failed`, `:exit_count`, `:elapsed_ms`.
   """
   def run do
     start = System.monotonic_time(:millisecond)
@@ -33,7 +33,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
       counter = :counters.new(1, [:atomics])
 
-      {snapshots_inserted, failed} =
+      {snapshots_inserted, failed, exit_count} =
         card_ids
         |> Task.async_stream(
           fn card_id -> {card_id, sync_card(card_id)} end,
@@ -41,7 +41,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
           timeout: 120_000,
           ordered: false
         )
-        |> Enum.reduce({0, []}, fn result, {inserted, failed_ids} ->
+        |> Enum.reduce({0, [], 0}, fn result, {inserted, failed_ids, exits} ->
           :counters.add(counter, 1, 1)
           processed = :counters.get(counter, 1)
 
@@ -54,24 +54,27 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
           case result do
             {:ok, {_card_id, {:ok, count}}} ->
-              {inserted + count, failed_ids}
+              {inserted + count, failed_ids, exits}
 
             {:ok, {card_id, {:error, _card_id, _reason}}} ->
-              {inserted, [card_id | failed_ids]}
+              {inserted, [card_id | failed_ids], exits}
 
             {:exit, reason} ->
               Logger.warning("PriceSync: task exited: #{inspect(reason)}")
-              {inserted, [:exit_timeout | failed_ids]}
+              {inserted, failed_ids, exits + 1}
           end
         end)
 
       elapsed_ms = System.monotonic_time(:millisecond) - start
       processed = :counters.get(counter, 1)
 
+      failure_total = length(failed) + exit_count
+
       Logger.info(
         "PriceSync: complete in #{format_duration(elapsed_ms)} — " <>
           "#{processed}/#{total} processed, #{snapshots_inserted} snapshots inserted, " <>
-          "#{length(failed)} failed"
+          "#{failure_total} failed" <>
+          if(exit_count > 0, do: " (#{exit_count} timed out)", else: "")
       )
 
       if failed != [] do
@@ -84,6 +87,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
          processed: processed,
          snapshots_inserted: snapshots_inserted,
          failed: failed,
+         exit_count: exit_count,
          elapsed_ms: elapsed_ms
        }}
     end
