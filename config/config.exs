@@ -47,7 +47,9 @@ config :pokevestment, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        # Daily price sync at 6 AM UTC
-       {"0 6 * * *", Pokevestment.Workers.DailyPriceSync, queue: :ingestion}
+       {"0 6 * * *", Pokevestment.Workers.DailyPriceSync, queue: :ingestion},
+       # Daily tournament sync at 8 AM UTC
+       {"0 8 * * *", Pokevestment.Workers.TournamentSync, queue: :ingestion}
      ]}
   ]
 
