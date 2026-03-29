@@ -10,6 +10,7 @@ defmodule Pokevestment.Tournaments.TournamentDeckCard do
     field :set_code, :string
     field :card_number, :string
     field :count, :integer
+    field :metadata, :map
 
     belongs_to :tournament_standing, Pokevestment.Tournaments.TournamentStanding
     belongs_to :card, Pokevestment.Cards.Card, type: :string
@@ -18,7 +19,7 @@ defmodule Pokevestment.Tournaments.TournamentDeckCard do
   end
 
   @required_fields ~w(tournament_standing_id card_category card_name set_code card_number count)a
-  @optional_fields ~w(card_id)a
+  @optional_fields ~w(card_id metadata)a
 
   def changeset(deck_card, attrs) do
     deck_card

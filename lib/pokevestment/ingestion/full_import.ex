@@ -2,6 +2,12 @@ defmodule Pokevestment.Ingestion.FullImport do
   @moduledoc """
   Orchestrates full data import from TCGdex and PokeAPI in FK dependency order:
   series -> sets -> species -> cards.
+
+  Note: `language_count` on cards is NOT populated during import because it requires
+  cross-language API data (6 Western TCGdex endpoints, range 1–6). Japanese is excluded
+  due to incompatible card ID schemes. After running the full import, run:
+
+      mix pokevestment.backfill_language_counts
   """
 
   require Logger
@@ -101,9 +107,7 @@ defmodule Pokevestment.Ingestion.FullImport do
                 {count + 1, failed}
 
               {:error, changeset} ->
-                Logger.warning(
-                  "Failed to upsert set #{attrs[:id]}: #{inspect(changeset.errors)}"
-                )
+                Logger.warning("Failed to upsert set #{attrs[:id]}: #{inspect(changeset.errors)}")
 
                 {count, [attrs[:id] | failed]}
             end
@@ -169,9 +173,7 @@ defmodule Pokevestment.Ingestion.FullImport do
               {new_count, evo_map}
 
             {:error, changeset} ->
-              Logger.warning(
-                "Failed to insert species #{id}: #{inspect(changeset.errors)}"
-              )
+              Logger.warning("Failed to insert species #{id}: #{inspect(changeset.errors)}")
 
               {count, evo_map}
           end

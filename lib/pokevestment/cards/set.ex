@@ -17,6 +17,11 @@ defmodule Pokevestment.Cards.Set do
     field :card_count_breakdown, :map
     field :metadata, :map
 
+    # ML feature columns (set-level supply proxies)
+    field :secret_rare_count, :integer
+    field :secret_rare_ratio, :decimal
+    field :era, :string
+
     belongs_to :series, Pokevestment.Cards.Series, type: :string
     has_many :cards, Pokevestment.Cards.Card
 
@@ -24,7 +29,7 @@ defmodule Pokevestment.Cards.Set do
   end
 
   @required_fields ~w(id name series_id)a
-  @optional_fields ~w(release_date card_count_official card_count_total logo_url symbol_url ptcgo_code legal_standard legal_expanded card_count_breakdown metadata)a
+  @optional_fields ~w(release_date card_count_official card_count_total logo_url symbol_url ptcgo_code legal_standard legal_expanded card_count_breakdown metadata secret_rare_count secret_rare_ratio era)a
 
   def changeset(set, attrs) do
     set

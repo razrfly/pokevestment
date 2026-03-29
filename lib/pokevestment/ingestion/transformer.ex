@@ -50,7 +50,7 @@ defmodule Pokevestment.Ingestion.Transformer do
     serie = raw["serie"] || %{}
     legal = raw["legal"] || %{}
 
-    %{
+    base = %{
       id: raw["id"],
       name: raw["name"],
       series_id: serie["id"],
@@ -65,6 +65,15 @@ defmodule Pokevestment.Ingestion.Transformer do
       card_count_breakdown: card_count,
       metadata: Map.drop(raw, ["cards"])
     }
+
+    set_features =
+      FeatureExtractor.compute_set_features(%{
+        series_id: serie["id"],
+        card_count_official: card_count["official"],
+        card_count_total: card_count["total"]
+      })
+
+    Map.merge(base, set_features)
   end
 
   # --- Pokemon Species ---
@@ -89,8 +98,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       flavor_text: extract_flavor_text(species_raw["flavor_text_entries"]),
       genus: extract_genus(species_raw["genera"]),
       evolves_from_species_id: extract_evolves_from_id(species_raw["evolves_from_species"]),
-      sprite_url:
-        get_in(pokemon_raw, ["sprites", "other", "official-artwork", "front_default"]),
+      sprite_url: get_in(pokemon_raw, ["sprites", "other", "official-artwork", "front_default"]),
       metadata: species_raw
     }
   end
@@ -154,11 +162,15 @@ defmodule Pokevestment.Ingestion.Transformer do
 
     card = Map.merge(card, features)
 
+    art_features = FeatureExtractor.compute_art_features(%{rarity: card_raw["rarity"]})
+    card = Map.merge(card, art_features)
+
     card_type_attrs =
       types |> Enum.uniq() |> Enum.map(fn type -> %{card_id: card_id, type_name: type} end)
 
     card_dex_id_attrs =
       dex_ids |> Enum.uniq() |> Enum.map(fn dex_id -> %{card_id: card_id, dex_id: dex_id} end)
+
     price_snapshot_attrs = build_price_snapshots(card_id, card_raw["pricing"])
 
     {card, card_type_attrs, card_dex_id_attrs, price_snapshot_attrs}

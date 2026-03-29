@@ -46,23 +46,16 @@ defmodule Mix.Tasks.Pokevestment.ImportTournaments do
   end
 
   defp parse_args(args) do
+    {parsed, _, _} =
+      OptionParser.parse(args,
+        strict: [format: :string, all: :boolean],
+        aliases: []
+      )
+
     cond do
-      "--all" in args ->
-        [format: nil]
-
-      match?([_, _], find_flag(args, "--format")) ->
-        [_, format] = find_flag(args, "--format")
-        [format: format]
-
-      true ->
-        [format: "STANDARD"]
-    end
-  end
-
-  defp find_flag(args, flag) do
-    case Enum.find_index(args, &(&1 == flag)) do
-      nil -> nil
-      idx -> [flag, Enum.at(args, idx + 1)]
+      parsed[:all] -> [format: nil]
+      parsed[:format] -> [format: parsed[:format]]
+      true -> [format: "STANDARD"]
     end
   end
 

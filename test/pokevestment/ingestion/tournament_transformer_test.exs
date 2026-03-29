@@ -83,6 +83,7 @@ defmodule Pokevestment.Ingestion.TournamentTransformerTest do
       assert result.dropped_round == nil
       assert result.deck_archetype_id == "charizard-ex"
       assert result.deck_archetype_name == "Charizard ex"
+      assert result.metadata == raw
     end
 
     test "falls back to name when player handle is nil" do
@@ -189,6 +190,7 @@ defmodule Pokevestment.Ingestion.TournamentTransformerTest do
       assert result.set_code == "SVI"
       assert result.card_number == "25"
       assert result.count == 3
+      assert result.metadata == card_raw
     end
 
     test "converts numeric card_number to string" do

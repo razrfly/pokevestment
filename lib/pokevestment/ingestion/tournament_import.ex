@@ -47,26 +47,32 @@ defmodule Pokevestment.Ingestion.TournamentImport do
     Logger.info("TournamentImport: #{MapSet.size(existing_ids)} tournaments already imported")
 
     with {:ok, raw_tournaments} <- Limitless.list_tournaments("PTCG") do
-      # Filter tournaments
+      # Filter tournaments and compute actual skipped count
+      filtered = filter_tournaments(raw_tournaments, format_filter, since)
+      skipped = Enum.count(filtered, fn t -> MapSet.member?(existing_ids, t["id"]) end)
+
       tournaments_to_import =
-        raw_tournaments
-        |> filter_tournaments(format_filter, since)
-        |> Enum.reject(fn t -> MapSet.member?(existing_ids, t["id"]) end)
+        Enum.reject(filtered, fn t -> MapSet.member?(existing_ids, t["id"]) end)
 
       total = length(tournaments_to_import)
 
       Logger.info(
         "TournamentImport: #{total} new tournaments to import " <>
-          "(#{length(raw_tournaments)} total, #{MapSet.size(existing_ids)} existing)"
+          "(#{length(raw_tournaments)} total, #{skipped} skipped)"
       )
 
       counter = :counters.new(1, [:atomics])
       unresolved_codes = :ets.new(:unresolved_codes, [:set, :public])
 
+      # Limitless API rate limit: 50 requests per 5 minutes.
+      # Each tournament needs 1 standings request, so we throttle to stay under.
+      # max_concurrency: 2 + 7s sleep = ~17 req/min (well under 10 req/min per worker).
       {tournaments_count, standings_count, deck_cards_count, failed} =
         tournaments_to_import
         |> Task.async_stream(
           fn raw_tournament ->
+            Process.sleep(7_000)
+
             result =
               import_tournament(raw_tournament, ptcgo_map, card_ids, unresolved_codes)
 
@@ -81,8 +87,8 @@ defmodule Pokevestment.Ingestion.TournamentImport do
 
             {raw_tournament["id"], result}
           end,
-          max_concurrency: 5,
-          timeout: 120_000,
+          max_concurrency: 2,
+          timeout: :infinity,
           ordered: false
         )
         |> Enum.reduce({0, 0, 0, []}, fn
@@ -124,7 +130,7 @@ defmodule Pokevestment.Ingestion.TournamentImport do
          tournaments: tournaments_count,
          standings: standings_count,
          deck_cards: deck_cards_count,
-         skipped: MapSet.size(existing_ids),
+         skipped: skipped,
          failed: failed,
          unresolved_codes: unresolved,
          elapsed_ms: elapsed_ms
@@ -140,69 +146,88 @@ defmodule Pokevestment.Ingestion.TournamentImport do
 
     case Limitless.get_standings(external_id) do
       {:ok, raw_standings} ->
-        Repo.transaction(fn ->
-          # Insert tournament
-          {:ok, tournament} =
-            %Tournament{}
-            |> Tournament.changeset(tournament_attrs)
-            |> Repo.insert(on_conflict: :nothing, conflict_target: [:external_id], returning: true)
+        result =
+          Repo.transaction(fn ->
+            # Insert tournament
+            {:ok, tournament} =
+              %Tournament{}
+              |> Tournament.changeset(tournament_attrs)
+              |> Repo.insert(on_conflict: :nothing, conflict_target: [:external_id])
 
-          # Process each standing
-          {standings_count, deck_cards_count} =
-            Enum.reduce(raw_standings, {0, 0}, fn raw_standing, {s_count, d_count} ->
-              standing_attrs =
-                TournamentTransformer.standing_attrs(raw_standing, tournament.id)
+            # Skip if tournament already existed (concurrent import race)
+            if is_nil(tournament.id) do
+              Repo.rollback(:already_exists)
+            end
 
-              case %TournamentStanding{}
-                   |> TournamentStanding.changeset(standing_attrs)
-                   |> Repo.insert(
-                     on_conflict: :nothing,
-                     conflict_target: [:tournament_id, :player_handle]
-                   ) do
-                {:ok, standing} ->
-                  # Build deck card rows
-                  decklist = raw_standing["decklist"]
+            # Process each standing
+            {standings_count, deck_cards_count} =
+              Enum.reduce(raw_standings, {0, 0}, fn raw_standing, {s_count, d_count} ->
+                standing_attrs =
+                  TournamentTransformer.standing_attrs(raw_standing, tournament.id)
 
-                  deck_card_attrs_list =
-                    TournamentTransformer.deck_card_attrs_from_decklist(
-                      decklist,
-                      standing.id
-                    )
+                case %TournamentStanding{tournament_id: tournament.id}
+                     |> TournamentStanding.changeset(standing_attrs)
+                     |> Repo.insert(
+                       on_conflict: :nothing,
+                       conflict_target: [:tournament_id, :player_handle]
+                     ) do
+                  {:ok, standing} ->
+                    if is_nil(standing.id) do
+                      # Standing already exists (concurrent race), skip deck cards
+                      {s_count, d_count}
+                    else
+                      # Build deck card rows
+                      decklist = raw_standing["decklist"]
 
-                  # Resolve card_ids and prepare for insert_all
-                  now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-                  rows =
-                    Enum.map(deck_card_attrs_list, fn attrs ->
-                      card_id =
-                        TournamentTransformer.resolve_card_id(
-                          attrs.set_code,
-                          attrs.card_number,
-                          ptcgo_map,
-                          card_ids
+                      deck_card_attrs_list =
+                        TournamentTransformer.deck_card_attrs_from_decklist(
+                          decklist,
+                          standing.id
                         )
 
-                      # Track unresolved codes
-                      if is_nil(card_id) and not is_nil(attrs.set_code) do
-                        :ets.insert(unresolved_codes, {attrs.set_code})
-                      end
+                      # Resolve card_ids and prepare for insert_all
+                      now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-                      attrs
-                      |> Map.put(:card_id, card_id)
-                      |> Map.put(:inserted_at, now)
-                    end)
+                      rows =
+                        deck_card_attrs_list
+                        |> Enum.map(fn attrs ->
+                          card_id =
+                            TournamentTransformer.resolve_card_id(
+                              attrs.set_code,
+                              attrs.card_number,
+                              ptcgo_map,
+                              card_ids
+                            )
 
-                  {inserted, _} = Repo.insert_all(TournamentDeckCard, rows)
-                  {s_count + 1, d_count + inserted}
+                          # Track unresolved codes
+                          if is_nil(card_id) and not is_nil(attrs.set_code) do
+                            :ets.insert(unresolved_codes, {attrs.set_code})
+                          end
 
-                {:error, _changeset} ->
-                  # Standing already exists (conflict), skip
-                  {s_count, d_count}
-              end
-            end)
+                          attrs
+                          |> Map.put(:card_id, card_id)
+                          |> Map.put(:inserted_at, now)
+                        end)
+                        |> Enum.filter(fn row -> is_integer(row.count) and row.count > 0 end)
 
-          %{standings: standings_count, deck_cards: deck_cards_count}
-        end)
+                      {inserted, _} = Repo.insert_all(TournamentDeckCard, rows)
+                      {s_count + 1, d_count + inserted}
+                    end
+
+                  {:error, _changeset} ->
+                    # Standing validation failed, skip
+                    {s_count, d_count}
+                end
+              end)
+
+            %{standings: standings_count, deck_cards: deck_cards_count}
+          end)
+
+        case result do
+          {:ok, counts} -> {:ok, counts}
+          {:error, :already_exists} -> {:ok, %{standings: 0, deck_cards: 0}}
+          {:error, reason} -> {:error, reason}
+        end
 
       {:error, reason} ->
         {:error, reason}

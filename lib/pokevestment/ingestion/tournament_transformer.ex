@@ -44,7 +44,8 @@ defmodule Pokevestment.Ingestion.TournamentTransformer do
       ties: record["ties"] || 0,
       dropped_round: raw["drop"],
       deck_archetype_id: deck["id"],
-      deck_archetype_name: truncate(deck["name"], 150)
+      deck_archetype_name: truncate(deck["name"], 150),
+      metadata: raw
     }
   end
 
@@ -79,7 +80,8 @@ defmodule Pokevestment.Ingestion.TournamentTransformer do
       card_name: truncate(card_raw["name"], 150),
       set_code: card_raw["set"],
       card_number: to_string(card_raw["number"]),
-      count: card_raw["count"]
+      count: card_raw["count"],
+      metadata: card_raw
     }
   end
 
