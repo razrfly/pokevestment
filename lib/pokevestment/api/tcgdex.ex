@@ -28,6 +28,29 @@ defmodule Pokevestment.Api.Tcgdex do
   @doc "Get full detail for a single card including pricing."
   def get_card(id), do: "/cards/#{id}" |> get() |> handle_response()
 
+  # 6 Western languages that share identical card IDs across TCGdex.
+  # Japanese is excluded: TCGdex uses entirely different set codes and card IDs
+  # for Japanese cards (e.g. SV1a-001 vs sv01-001), with no reliable mapping.
+  @languages ~w(en fr de it es pt)
+
+  @doc """
+  List all card IDs for a given language endpoint.
+
+  Uses a dynamic Tesla client since the module-level client is hardcoded to `/v2/en`.
+  Supported languages: #{Enum.join(@languages, ", ")}
+  """
+  def list_cards_for_language(lang) when lang in @languages do
+    client =
+      Tesla.client([
+        {Tesla.Middleware.BaseUrl, "https://api.tcgdex.net/v2/#{lang}"},
+        Tesla.Middleware.JSON,
+        {Tesla.Middleware.Retry, delay: 500, max_retries: 3, max_delay: 4_000},
+        {Tesla.Middleware.Timeout, timeout: 60_000}
+      ])
+
+    Tesla.get(client, "/cards") |> handle_response()
+  end
+
   defp handle_response({:ok, %Tesla.Env{status: status, body: body}}) when status in 200..299 do
     {:ok, body}
   end

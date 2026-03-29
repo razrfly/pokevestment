@@ -8,6 +8,7 @@ defmodule Pokevestment.Cards.CardDexId do
     field :dex_id, :integer
 
     belongs_to :card, Pokevestment.Cards.Card, type: :string
+
     belongs_to :species, Pokevestment.Pokemon.Species,
       foreign_key: :dex_id,
       references: :id,

@@ -18,7 +18,7 @@ defmodule Pokevestment.Repo.Migrations.AddMlFeatureColumnsToCards do
     create index(:cards, [:max_attack_damage])
 
     create index(:cards, [:attack_count, :has_ability, :weakness_count, :resistance_count],
-      name: :cards_ml_feature_vector_index
-    )
+             name: :cards_ml_feature_vector_index
+           )
   end
 end

@@ -39,6 +39,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
           fn card_id -> {card_id, sync_card(card_id)} end,
           max_concurrency: 10,
           timeout: 120_000,
+          on_timeout: :kill_task,
           ordered: false
         )
         |> Enum.reduce({0, [], 0}, fn result, {inserted, failed_ids, exits} ->

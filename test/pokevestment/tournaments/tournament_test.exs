@@ -74,15 +74,16 @@ defmodule Pokevestment.Tournaments.TournamentTest do
 
     test "valid with required fields", %{tournament: t} do
       changeset =
-        TournamentStanding.changeset(%TournamentStanding{}, %{tournament_id: t.id})
+        TournamentStanding.changeset(%TournamentStanding{tournament_id: t.id}, %{
+          player_handle: "test_player"
+        })
 
       assert changeset.valid?
     end
 
     test "valid with all fields", %{tournament: t} do
       changeset =
-        TournamentStanding.changeset(%TournamentStanding{}, %{
-          tournament_id: t.id,
+        TournamentStanding.changeset(%TournamentStanding{tournament_id: t.id}, %{
           player_name: "Ash Ketchum",
           player_handle: "ash_k",
           country: "US",
@@ -98,17 +99,33 @@ defmodule Pokevestment.Tournaments.TournamentTest do
     end
 
     test "invalid without tournament_id" do
-      changeset = TournamentStanding.changeset(%TournamentStanding{}, %{})
+      changeset =
+        TournamentStanding.changeset(%TournamentStanding{}, %{player_handle: "test"})
+
       refute changeset.valid?
       assert %{tournament_id: ["can't be blank"]} = errors_on(changeset)
     end
 
+    test "invalid without player_handle", %{tournament: t} do
+      changeset =
+        TournamentStanding.changeset(%TournamentStanding{tournament_id: t.id}, %{})
+
+      refute changeset.valid?
+      assert %{player_handle: ["can't be blank"]} = errors_on(changeset)
+    end
+
     test "enforces unique (tournament_id, player_handle)", %{tournament: t} do
-      attrs = %{tournament_id: t.id, player_handle: "ash_k"}
-      {:ok, _} = %TournamentStanding{} |> TournamentStanding.changeset(attrs) |> Repo.insert()
+      attrs = %{player_handle: "ash_k"}
+
+      {:ok, _} =
+        %TournamentStanding{tournament_id: t.id}
+        |> TournamentStanding.changeset(attrs)
+        |> Repo.insert()
 
       {:error, changeset} =
-        %TournamentStanding{} |> TournamentStanding.changeset(attrs) |> Repo.insert()
+        %TournamentStanding{tournament_id: t.id}
+        |> TournamentStanding.changeset(attrs)
+        |> Repo.insert()
 
       assert %{tournament_id: ["has already been taken"]} = errors_on(changeset)
     end
@@ -122,8 +139,8 @@ defmodule Pokevestment.Tournaments.TournamentTest do
         |> Repo.insert()
 
       {:ok, standing} =
-        %TournamentStanding{}
-        |> TournamentStanding.changeset(%{tournament_id: tournament.id, player_handle: "p1"})
+        %TournamentStanding{tournament_id: tournament.id}
+        |> TournamentStanding.changeset(%{player_handle: "p1"})
         |> Repo.insert()
 
       %{standing: standing}
@@ -195,8 +212,8 @@ defmodule Pokevestment.Tournaments.TournamentTest do
         |> Repo.insert()
 
       {:ok, standing} =
-        %TournamentStanding{}
-        |> TournamentStanding.changeset(%{tournament_id: tournament.id, player_handle: "p1"})
+        %TournamentStanding{tournament_id: tournament.id}
+        |> TournamentStanding.changeset(%{player_handle: "p1"})
         |> Repo.insert()
 
       now = DateTime.utc_now() |> DateTime.truncate(:second)

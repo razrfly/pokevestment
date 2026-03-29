@@ -53,6 +53,7 @@ defmodule Pokevestment.MixProject do
       # HTTP Client
       {:tesla, "~> 1.8"},
       {:hackney, "~> 1.20"},
+      {:req, "~> 0.5"},
 
       # Background Jobs
       {:oban, "~> 2.17"},

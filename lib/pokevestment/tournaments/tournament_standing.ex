@@ -13,6 +13,7 @@ defmodule Pokevestment.Tournaments.TournamentStanding do
     field :dropped_round, :integer
     field :deck_archetype_id, :string
     field :deck_archetype_name, :string
+    field :metadata, :map
 
     belongs_to :tournament, Pokevestment.Tournaments.Tournament
     has_many :deck_cards, Pokevestment.Tournaments.TournamentDeckCard
@@ -20,13 +21,12 @@ defmodule Pokevestment.Tournaments.TournamentStanding do
     timestamps(type: :utc_datetime)
   end
 
-  @required_fields ~w(tournament_id)a
-  @optional_fields ~w(player_name player_handle country placing wins losses ties dropped_round deck_archetype_id deck_archetype_name)a
+  @castable_fields ~w(player_name player_handle country placing wins losses ties dropped_round deck_archetype_id deck_archetype_name metadata)a
 
   def changeset(standing, attrs) do
     standing
-    |> cast(attrs, @required_fields ++ @optional_fields)
-    |> validate_required(@required_fields)
+    |> cast(attrs, @castable_fields)
+    |> validate_required([:tournament_id, :player_handle])
     |> validate_length(:player_name, max: 100)
     |> validate_length(:player_handle, max: 100)
     |> validate_length(:country, max: 2)
