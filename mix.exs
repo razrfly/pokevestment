@@ -51,8 +51,6 @@ defmodule Pokevestment.MixProject do
       {:bandit, "~> 1.5"},
 
       # HTTP Client
-      {:tesla, "~> 1.8"},
-      {:hackney, "~> 1.20"},
       {:req, "~> 0.5"},
 
       # Background Jobs

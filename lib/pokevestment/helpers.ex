@@ -23,6 +23,11 @@ defmodule Pokevestment.Helpers do
   def format_duration(ms) do
     minutes = div(ms, 60_000)
     seconds = Float.round(rem(ms, 60_000) / 1_000, 1)
+
+    # Float.round can push 59.999... to 60.0 — carry into minutes
+    {minutes, seconds} =
+      if seconds >= 60.0, do: {minutes + 1, seconds - 60.0}, else: {minutes, seconds}
+
     "#{minutes}m #{seconds}s"
   end
 end
