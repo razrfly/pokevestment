@@ -32,6 +32,20 @@ defmodule Pokevestment.Cards.Card do
     field :api_updated_at, :utc_datetime
     field :metadata, :map
 
+    # ML feature columns
+    field :attack_count, :integer, default: 0
+    field :total_attack_damage, :integer, default: 0
+    field :max_attack_damage, :integer, default: 0
+    field :has_ability, :boolean, default: false
+    field :ability_count, :integer, default: 0
+    field :weakness_count, :integer, default: 0
+    field :resistance_count, :integer, default: 0
+
+    # Variant feature columns
+    field :first_edition, :boolean, default: false
+    field :is_shadowless, :boolean, default: false
+    field :has_first_edition_stamp, :boolean, default: false
+
     belongs_to :set, Pokevestment.Cards.Set, type: :string
     has_many :card_types, Pokevestment.Cards.CardType
     has_many :card_dex_ids, Pokevestment.Cards.CardDexId
@@ -41,7 +55,7 @@ defmodule Pokevestment.Cards.Card do
   end
 
   @required_fields ~w(id name local_id category set_id)a
-  @optional_fields ~w(rarity hp stage suffix illustrator evolves_from retreat_cost regulation_mark energy_type trainer_type legal_standard legal_expanded is_secret_rare generation variants variants_detailed attacks abilities weaknesses resistances image_url api_updated_at metadata)a
+  @optional_fields ~w(rarity hp stage suffix illustrator evolves_from retreat_cost regulation_mark energy_type trainer_type legal_standard legal_expanded is_secret_rare generation variants variants_detailed attacks abilities weaknesses resistances image_url api_updated_at metadata attack_count total_attack_damage max_attack_damage has_ability ability_count weakness_count resistance_count first_edition is_shadowless has_first_edition_stamp)a
 
   def changeset(card, attrs) do
     card
