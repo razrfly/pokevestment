@@ -28,6 +28,10 @@ defmodule Mix.Tasks.Pokevestment.PriceSync do
           Mix.shell().info("  Failed:             #{length(summary.failed)}")
         end
 
+        if summary.exit_count > 0 do
+          Mix.shell().info("  Timed out:          #{summary.exit_count}")
+        end
+
       {:error, reason} ->
         Mix.raise("Price sync failed: #{inspect(reason)}")
     end

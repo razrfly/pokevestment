@@ -56,23 +56,27 @@ defmodule Mix.Tasks.Pokevestment.BackfillFeatures do
       acc
     else
       case Repo.transaction(fn ->
-             Enum.each(batch, fn {id, attacks, abilities, weaknesses, resistances, variants, variants_detailed} ->
-               features =
-                 FeatureExtractor.compute_features(%{
-                   attacks: attacks,
-                   abilities: abilities,
-                   weaknesses: weaknesses,
-                   resistances: resistances,
-                   variants: variants,
-                   variants_detailed: variants_detailed
-                 })
+             try do
+               Enum.each(batch, fn {id, attacks, abilities, weaknesses, resistances, variants, variants_detailed} ->
+                 features =
+                   FeatureExtractor.compute_features(%{
+                     attacks: attacks,
+                     abilities: abilities,
+                     weaknesses: weaknesses,
+                     resistances: resistances,
+                     variants: variants,
+                     variants_detailed: variants_detailed
+                   })
 
-               from(c in Card, where: c.id == ^id)
-               |> Repo.update_all(set: Map.to_list(Map.take(features, @feature_keys)))
-             end)
+                 from(c in Card, where: c.id == ^id)
+                 |> Repo.update_all(set: Map.to_list(Map.take(features, @feature_keys)))
+               end)
+             rescue
+               e -> Repo.rollback(Exception.message(e))
+             end
            end) do
         {:ok, _} -> :ok
-        {:error, reason} -> Mix.raise("Batch transaction failed: #{inspect(reason)}")
+        {:error, reason} -> Mix.raise("Batch transaction failed: #{reason}")
       end
 
       processed = acc + length(batch)
