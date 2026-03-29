@@ -306,7 +306,7 @@ Features 62-66 are available today from CardMarket's rolling averages — no nee
 
 **For the UI/UX**: When explaining "why is this card undervalued?", group the top contributing features under their umbrella:
 
-```
+```text
 STRONG BUY — Pikachu VMAX (Secret)
 
 Value Drivers:
