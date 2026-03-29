@@ -13,6 +13,7 @@ defmodule Pokevestment.Ingestion.FullImport do
   require Logger
 
   import Ecto.Query
+  import Pokevestment.Helpers, only: [format_duration: 1]
 
   alias Pokevestment.Repo
   alias Pokevestment.Api.{Tcgdex, PokeApi}
@@ -98,6 +99,7 @@ defmodule Pokevestment.Ingestion.FullImport do
           end,
           max_concurrency: 10,
           timeout: 120_000,
+          on_timeout: :kill_task,
           ordered: false
         )
         |> Enum.reduce({0, []}, fn
@@ -156,6 +158,7 @@ defmodule Pokevestment.Ingestion.FullImport do
         end,
         max_concurrency: 3,
         timeout: 120_000,
+        on_timeout: :kill_task,
         ordered: false
       )
       |> Enum.reduce({0, %{}}, fn
@@ -234,6 +237,7 @@ defmodule Pokevestment.Ingestion.FullImport do
           end,
           max_concurrency: 10,
           timeout: 120_000,
+          on_timeout: :kill_task,
           ordered: false
         )
         |> Enum.reduce({0, []}, fn
@@ -363,14 +367,4 @@ defmodule Pokevestment.Ingestion.FullImport do
     |> MapSet.new()
   end
 
-  # --- Private: Formatting ---
-
-  defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"
-  defp format_duration(ms) when ms < 60_000, do: "#{Float.round(ms / 1_000, 1)}s"
-
-  defp format_duration(ms) do
-    minutes = div(ms, 60_000)
-    seconds = Float.round(rem(ms, 60_000) / 1_000, 1)
-    "#{minutes}m #{seconds}s"
-  end
 end

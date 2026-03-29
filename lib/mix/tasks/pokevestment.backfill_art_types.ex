@@ -17,6 +17,8 @@ defmodule Mix.Tasks.Pokevestment.BackfillArtTypes do
   alias Pokevestment.Cards.Card
   alias Pokevestment.Ingestion.FeatureExtractor
 
+  import Pokevestment.Helpers, only: [format_duration: 1]
+
   @shortdoc "Backfill art type feature columns on cards"
   @batch_size 1000
 
@@ -64,31 +66,21 @@ defmodule Mix.Tasks.Pokevestment.BackfillArtTypes do
              end
            end) do
         {:ok, _} ->
-          :ok
+          processed = acc + length(batch)
+          {new_last_id, _} = List.last(batch)
+
+          if rem(processed, 5_000) == 0 or processed == total do
+            Mix.shell().info("  Backfilled #{processed}/#{total} cards")
+          end
+
+          backfill_batches(total, new_last_id, processed)
 
         {:error, reason} ->
-          Mix.shell().error(
-            "Batch transaction failed (skipping batch after #{acc} cards): #{reason}"
+          Mix.raise(
+            "Batch transaction failed after #{acc} cards: #{reason}"
           )
       end
-
-      processed = acc + length(batch)
-      {new_last_id, _} = List.last(batch)
-
-      if rem(processed, 5_000) == 0 or processed == total do
-        Mix.shell().info("  Backfilled #{processed}/#{total} cards")
-      end
-
-      backfill_batches(total, new_last_id, processed)
     end
   end
 
-  defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"
-  defp format_duration(ms) when ms < 60_000, do: "#{Float.round(ms / 1_000, 1)}s"
-
-  defp format_duration(ms) do
-    minutes = div(ms, 60_000)
-    seconds = Float.round(rem(ms, 60_000) / 1_000, 1)
-    "#{minutes}m #{seconds}s"
-  end
 end

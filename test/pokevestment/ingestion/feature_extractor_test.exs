@@ -227,6 +227,68 @@ defmodule Pokevestment.Ingestion.FeatureExtractorTest do
     end
   end
 
+  describe "compute_energy_cost/1" do
+    test "sums cost lengths across multiple attacks" do
+      data = %{
+        attacks: [
+          %{"cost" => ["Fire", "Fire", "Colorless"]},
+          %{"cost" => ["Fire"]}
+        ]
+      }
+
+      assert FeatureExtractor.compute_energy_cost(data) == %{energy_cost_total: 4}
+    end
+
+    test "single attack with cost" do
+      data = %{attacks: [%{"cost" => ["Water", "Water"]}]}
+      assert FeatureExtractor.compute_energy_cost(data) == %{energy_cost_total: 2}
+    end
+
+    test "attack without cost key returns 0 for that attack" do
+      data = %{attacks: [%{"name" => "Tackle", "damage" => "30"}]}
+      assert FeatureExtractor.compute_energy_cost(data) == %{energy_cost_total: 0}
+    end
+
+    test "empty attacks list returns 0" do
+      assert FeatureExtractor.compute_energy_cost(%{attacks: []}) == %{energy_cost_total: 0}
+    end
+
+    test "nil attacks returns 0" do
+      assert FeatureExtractor.compute_energy_cost(%{attacks: nil}) == %{energy_cost_total: 0}
+    end
+
+    test "missing attacks key returns 0" do
+      assert FeatureExtractor.compute_energy_cost(%{}) == %{energy_cost_total: 0}
+    end
+
+    test "accepts atom-keyed attack maps" do
+      data = %{attacks: [%{cost: ["Grass", "Colorless"]}]}
+      assert FeatureExtractor.compute_energy_cost(data) == %{energy_cost_total: 2}
+    end
+
+    test "accepts string-keyed outer map" do
+      data = %{"attacks" => [%{"cost" => ["Lightning"]}]}
+      assert FeatureExtractor.compute_energy_cost(data) == %{energy_cost_total: 1}
+    end
+
+    test "empty cost array returns 0 for that attack" do
+      data = %{attacks: [%{"cost" => []}]}
+      assert FeatureExtractor.compute_energy_cost(data) == %{energy_cost_total: 0}
+    end
+
+    test "mixed attacks with and without cost" do
+      data = %{
+        attacks: [
+          %{"cost" => ["Fire", "Fire"], "damage" => "50"},
+          %{"name" => "Ability Attack"},
+          %{"cost" => ["Colorless"], "damage" => "20"}
+        ]
+      }
+
+      assert FeatureExtractor.compute_energy_cost(data) == %{energy_cost_total: 3}
+    end
+  end
+
   describe "compute_set_features/1" do
     test "normal set computes secret rare count, ratio, and era" do
       result =
@@ -300,6 +362,19 @@ defmodule Pokevestment.Ingestion.FeatureExtractorTest do
 
       assert result.secret_rare_count == 30
       assert result.era == "xy"
+    end
+
+    test "total < official produces nil secret_rare_count (inconsistent data)" do
+      result =
+        FeatureExtractor.compute_set_features(%{
+          card_count_official: 200,
+          card_count_total: 150,
+          series_id: "sv"
+        })
+
+      assert result.secret_rare_count == nil
+      assert result.secret_rare_ratio == nil
+      assert result.era == "sv"
     end
   end
 end

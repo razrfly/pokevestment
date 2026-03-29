@@ -17,6 +17,8 @@ defmodule Mix.Tasks.Pokevestment.BackfillFeatures do
   alias Pokevestment.Cards.Card
   alias Pokevestment.Ingestion.FeatureExtractor
 
+  import Pokevestment.Helpers, only: [format_duration: 1]
+
   @shortdoc "Backfill ML feature columns on cards"
   @batch_size 1000
 
@@ -45,7 +47,8 @@ defmodule Mix.Tasks.Pokevestment.BackfillFeatures do
     :resistance_count,
     :first_edition,
     :is_shadowless,
-    :has_first_edition_stamp
+    :has_first_edition_stamp,
+    :energy_cost_total
   ]
 
   defp backfill_batches(total, last_id, acc) do
@@ -80,6 +83,9 @@ defmodule Mix.Tasks.Pokevestment.BackfillFeatures do
                      variants_detailed: variants_detailed
                    })
 
+                 energy_features = FeatureExtractor.compute_energy_cost(%{attacks: attacks})
+                 features = Map.merge(features, energy_features)
+
                  from(c in Card, where: c.id == ^id)
                  |> Repo.update_all(set: Map.to_list(Map.take(features, @feature_keys)))
                end)
@@ -88,31 +94,21 @@ defmodule Mix.Tasks.Pokevestment.BackfillFeatures do
              end
            end) do
         {:ok, _} ->
-          :ok
+          processed = acc + length(batch)
+          {new_last_id, _, _, _, _, _, _} = List.last(batch)
+
+          if rem(processed, 5_000) == 0 or processed == total do
+            Mix.shell().info("  Backfilled #{processed}/#{total} cards")
+          end
+
+          backfill_batches(total, new_last_id, processed)
 
         {:error, reason} ->
-          Mix.shell().error(
-            "Batch transaction failed (skipping batch after #{acc} cards): #{reason}"
+          Mix.raise(
+            "Batch transaction failed after #{acc} cards: #{reason}"
           )
       end
-
-      processed = acc + length(batch)
-      {new_last_id, _, _, _, _, _, _} = List.last(batch)
-
-      if rem(processed, 5_000) == 0 or processed == total do
-        Mix.shell().info("  Backfilled #{processed}/#{total} cards")
-      end
-
-      backfill_batches(total, new_last_id, processed)
     end
   end
 
-  defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"
-  defp format_duration(ms) when ms < 60_000, do: "#{Float.round(ms / 1_000, 1)}s"
-
-  defp format_duration(ms) do
-    minutes = div(ms, 60_000)
-    seconds = Float.round(rem(ms, 60_000) / 1_000, 1)
-    "#{minutes}m #{seconds}s"
-  end
 end

@@ -38,6 +38,7 @@ defmodule Pokevestment.Cards.Set do
     |> validate_length(:id, max: 30)
     |> validate_length(:name, max: 100)
     |> validate_length(:ptcgo_code, max: 10)
+    |> validate_length(:era, max: 20)
     |> foreign_key_constraint(:series_id)
   end
 end
