@@ -35,17 +35,25 @@ mix pokevestment.backfill_features
 # 3. Compute art type features from rarity (~10 sec, no network)
 mix pokevestment.backfill_art_types
 
-# 4. Import tournament data from Limitless TCG
+# 4. Backfill set-level supply proxy features (~1 sec, no network)
+#    Populates: secret_rare_count, secret_rare_ratio, era on sets
+mix pokevestment.backfill_set_features
+
+# 5. Backfill language availability counts (~2 min, hits TCGdex for 6 languages)
+#    Populates: language_count on cards (range 1–6)
+mix pokevestment.backfill_language_counts
+
+# 6. Import tournament data from Limitless TCG
 #    Hits Limitless live, rate-limited (~7s/tournament), ~4 min for ~37 tournaments
 #    Links deck cards to cards table via PTCGO code mapping
 mix pokevestment.import_tournaments
 ```
 
-All tasks are idempotent — safe to re-run if interrupted. Already-imported data is skipped via `on_conflict: :nothing`.
+All tasks are idempotent — safe to re-run if interrupted. Already-imported data is skipped via `on_conflict: :nothing`. Skipping backfill steps 2–5 will leave ML features, art types, set supply proxies (`secret_rare_count`, `secret_rare_ratio`, `era`), and `language_count` at their defaults.
 
 ### Verify the Load
 
-After all four steps complete, expected row counts:
+After all steps complete, expected row counts:
 
 | Table | Expected Rows |
 |---|---|
@@ -152,6 +160,8 @@ All tasks are namespaced under `mix pokevestment.*` and follow consistent patter
 | `mix pokevestment.import_tournaments` | Import tournament data from Limitless TCG | ~4 min |
 | `mix pokevestment.backfill_features` | Compute ML feature columns on cards | ~10 sec |
 | `mix pokevestment.backfill_art_types` | Compute art type features from rarity | ~10 sec |
+| `mix pokevestment.backfill_set_features` | Compute set-level supply proxy features | ~1 sec |
+| `mix pokevestment.backfill_language_counts` | Backfill language availability counts | ~2 min |
 
 ### Detailed Usage
 
@@ -176,6 +186,12 @@ mix pokevestment.backfill_features
 
 # Art type feature backfill (run after initial card import)
 mix pokevestment.backfill_art_types
+
+# Set-level supply proxy features (run after initial set import)
+mix pokevestment.backfill_set_features
+
+# Language availability counts (run after initial card import, hits TCGdex)
+mix pokevestment.backfill_language_counts
 ```
 
 ## Mix Task Naming Conventions

@@ -21,11 +21,12 @@ defmodule Pokevestment.Tournaments.TournamentStanding do
     timestamps(type: :utc_datetime)
   end
 
-  @castable_fields ~w(player_name player_handle country placing wins losses ties dropped_round deck_archetype_id deck_archetype_name metadata)a
+  @castable_fields ~w(player_name player_handle country placing wins losses ties dropped_round deck_archetype_id deck_archetype_name)a
 
   def changeset(standing, attrs) do
     standing
     |> cast(attrs, @castable_fields)
+    |> maybe_put_metadata(attrs)
     |> validate_required([:tournament_id, :player_handle])
     |> validate_length(:player_name, max: 100)
     |> validate_length(:player_handle, max: 100)
@@ -35,4 +36,11 @@ defmodule Pokevestment.Tournaments.TournamentStanding do
     |> unique_constraint([:tournament_id, :player_handle])
     |> foreign_key_constraint(:tournament_id)
   end
+
+  # metadata is set explicitly by the ingestion pipeline, not via user-facing cast
+  defp maybe_put_metadata(changeset, %{metadata: metadata}) when is_map(metadata) do
+    put_change(changeset, :metadata, metadata)
+  end
+
+  defp maybe_put_metadata(changeset, _attrs), do: changeset
 end

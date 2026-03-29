@@ -54,6 +54,9 @@ defmodule Pokevestment.Cards.Card do
     # Language availability
     field :language_count, :integer, default: 1
 
+    # Energy cost feature
+    field :energy_cost_total, :integer, default: 0
+
     belongs_to :set, Pokevestment.Cards.Set, type: :string
     has_many :card_types, Pokevestment.Cards.CardType
     has_many :card_dex_ids, Pokevestment.Cards.CardDexId
@@ -63,7 +66,11 @@ defmodule Pokevestment.Cards.Card do
   end
 
   @required_fields ~w(id name local_id category set_id)a
-  @optional_fields ~w(rarity hp stage suffix illustrator evolves_from retreat_cost regulation_mark energy_type trainer_type legal_standard legal_expanded is_secret_rare generation variants variants_detailed attacks abilities weaknesses resistances image_url api_updated_at metadata attack_count total_attack_damage max_attack_damage has_ability ability_count weakness_count resistance_count first_edition is_shadowless has_first_edition_stamp art_type is_full_art is_alternate_art language_count)a
+  # Pipeline-computed fields (attack_count through energy_cost_total) are set by
+  # FeatureExtractor during import and backfill tasks. They're castable because
+  # the full import pipeline sets them via Card.changeset.
+  @optional_fields ~w(rarity hp stage suffix illustrator evolves_from retreat_cost regulation_mark energy_type trainer_type legal_standard legal_expanded is_secret_rare generation variants variants_detailed attacks abilities weaknesses resistances image_url api_updated_at metadata attack_count total_attack_damage max_attack_damage has_ability ability_count weakness_count resistance_count first_edition is_shadowless has_first_edition_stamp art_type is_full_art is_alternate_art energy_cost_total)a
+  # language_count is only set by the backfill_language_counts task via Repo.update_all
 
   def changeset(card, attrs) do
     card

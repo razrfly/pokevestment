@@ -120,7 +120,9 @@ defmodule Pokevestment.Ingestion.FeatureExtractor do
     series_id = Map.get(data, :series_id) || Map.get(data, "series_id")
 
     secret_count =
-      if is_integer(total) and is_integer(official), do: total - official, else: nil
+      if is_integer(total) and is_integer(official) and total >= official,
+        do: total - official,
+        else: nil
 
     secret_ratio =
       if is_integer(secret_count) and is_integer(official) and official > 0,
@@ -209,6 +211,25 @@ defmodule Pokevestment.Ingestion.FeatureExtractor do
       stamps = Map.get(variant, "stamp") || Map.get(variant, :stamp)
       is_list(stamps) and stamp in stamps
     end)
+  end
+
+  @doc """
+  Compute total energy cost across all attacks.
+
+  Accepts a map with `:attacks` or `"attacks"` key.
+  Each attack should have a `"cost"` or `:cost` list of energy type strings.
+  Returns `%{energy_cost_total: integer}`.
+  """
+  def compute_energy_cost(data) when is_map(data) do
+    attacks = get_list(data, :attacks, "attacks")
+
+    total =
+      Enum.reduce(attacks, 0, fn attack, acc ->
+        cost = Map.get(attack, "cost") || Map.get(attack, :cost)
+        if is_list(cost), do: acc + length(cost), else: acc
+      end)
+
+    %{energy_cost_total: total}
   end
 
   defp get_list(map, atom_key, string_key) do

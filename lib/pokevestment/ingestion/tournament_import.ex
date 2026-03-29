@@ -10,6 +10,7 @@ defmodule Pokevestment.Ingestion.TournamentImport do
   require Logger
 
   import Ecto.Query
+  import Pokevestment.Helpers, only: [format_duration: 1]
 
   alias Pokevestment.Repo
   alias Pokevestment.Api.Limitless
@@ -64,9 +65,8 @@ defmodule Pokevestment.Ingestion.TournamentImport do
       counter = :counters.new(1, [:atomics])
       unresolved_codes = :ets.new(:unresolved_codes, [:set, :public])
 
-      # Limitless API rate limit: 50 requests per 5 minutes.
-      # Each tournament needs 1 standings request, so we throttle to stay under.
-      # max_concurrency: 2 + 7s sleep = ~17 req/min (well under 10 req/min per worker).
+      # Limitless API rate limit: 50 requests per 5 minutes (10 req/min global).
+      # Sequential processing + 7s sleep = ~8.5 req/min, safely under the limit.
       {tournaments_count, standings_count, deck_cards_count, failed} =
         tournaments_to_import
         |> Task.async_stream(
@@ -87,7 +87,7 @@ defmodule Pokevestment.Ingestion.TournamentImport do
 
             {raw_tournament["id"], result}
           end,
-          max_concurrency: 2,
+          max_concurrency: 1,
           timeout: :infinity,
           ordered: false
         )
@@ -290,14 +290,4 @@ defmodule Pokevestment.Ingestion.TournamentImport do
     |> MapSet.new()
   end
 
-  # --- Private: Formatting ---
-
-  defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"
-  defp format_duration(ms) when ms < 60_000, do: "#{Float.round(ms / 1_000, 1)}s"
-
-  defp format_duration(ms) do
-    minutes = div(ms, 60_000)
-    seconds = Float.round(rem(ms, 60_000) / 1_000, 1)
-    "#{minutes}m #{seconds}s"
-  end
 end

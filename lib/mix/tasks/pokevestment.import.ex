@@ -13,6 +13,8 @@ defmodule Mix.Tasks.Pokevestment.Import do
 
   use Mix.Task
 
+  import Pokevestment.Helpers, only: [format_duration: 1]
+
   @shortdoc "Import data from TCGdex and PokeAPI"
 
   @impl Mix.Task
@@ -83,12 +85,4 @@ defmodule Mix.Tasks.Pokevestment.Import do
 
   defp print_summary(_), do: :ok
 
-  defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"
-  defp format_duration(ms) when ms < 60_000, do: "#{Float.round(ms / 1_000, 1)}s"
-
-  defp format_duration(ms) do
-    minutes = div(ms, 60_000)
-    seconds = Float.round(rem(ms, 60_000) / 1_000, 1)
-    "#{minutes}m #{seconds}s"
-  end
 end

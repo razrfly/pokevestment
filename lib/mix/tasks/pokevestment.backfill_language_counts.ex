@@ -25,6 +25,8 @@ defmodule Mix.Tasks.Pokevestment.BackfillLanguageCounts do
   alias Pokevestment.Cards.Card
   alias Pokevestment.Api.Tcgdex
 
+  import Pokevestment.Helpers, only: [format_duration: 1]
+
   @shortdoc "Backfill language_count on cards from TCGdex multi-language data"
   @languages ~w(en fr de it es pt)
   @batch_size 1000
@@ -87,7 +89,7 @@ defmodule Mix.Tasks.Pokevestment.BackfillLanguageCounts do
 
       Mix.shell().info("Unique cards across languages: #{map_size(freq_map)}")
 
-      # Only update cards that exist in our DB and have count > 1
+      # Update all cards that exist in our DB (including count == 1 for idempotency)
       db_card_ids =
         from(c in Card, select: c.id)
         |> Repo.all()
@@ -95,27 +97,35 @@ defmodule Mix.Tasks.Pokevestment.BackfillLanguageCounts do
 
       updates =
         freq_map
-        |> Enum.filter(fn {id, count} -> count > 1 and MapSet.member?(db_card_ids, id) end)
+        |> Enum.filter(fn {id, _count} -> MapSet.member?(db_card_ids, id) end)
         |> Enum.sort_by(&elem(&1, 0))
 
-      Mix.shell().info("Cards to update (language_count > 1): #{length(updates)}")
+      Mix.shell().info("Cards to update: #{length(updates)}")
+
+      # Group by count value and batch update — one query per (count, batch) instead of per card
+      updates_by_count =
+        Enum.group_by(updates, fn {_id, count} -> count end, fn {id, _count} -> id end)
+
+      total_updates = length(updates)
 
       updated =
-        updates
-        |> Enum.chunk_every(@batch_size)
-        |> Enum.reduce(0, fn batch, acc ->
-          Enum.each(batch, fn {id, count} ->
-            from(c in Card, where: c.id == ^id)
+        updates_by_count
+        |> Enum.sort_by(&elem(&1, 0))
+        |> Enum.reduce(0, fn {count, ids}, acc ->
+          ids
+          |> Enum.chunk_every(@batch_size)
+          |> Enum.reduce(acc, fn batch_ids, inner_acc ->
+            from(c in Card, where: c.id in ^batch_ids)
             |> Repo.update_all(set: [language_count: count])
+
+            processed = inner_acc + length(batch_ids)
+
+            if rem(processed, 5_000) == 0 or processed == total_updates do
+              Mix.shell().info("  Updated #{processed}/#{total_updates} cards")
+            end
+
+            processed
           end)
-
-          processed = acc + length(batch)
-
-          if rem(processed, 5_000) == 0 or processed == length(updates) do
-            Mix.shell().info("  Updated #{processed}/#{length(updates)} cards")
-          end
-
-          processed
         end)
 
       elapsed = System.monotonic_time(:millisecond) - start
@@ -135,12 +145,4 @@ defmodule Mix.Tasks.Pokevestment.BackfillLanguageCounts do
     end
   end
 
-  defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"
-  defp format_duration(ms) when ms < 60_000, do: "#{Float.round(ms / 1_000, 1)}s"
-
-  defp format_duration(ms) do
-    minutes = div(ms, 60_000)
-    seconds = Float.round(rem(ms, 60_000) / 1_000, 1)
-    "#{minutes}m #{seconds}s"
-  end
 end

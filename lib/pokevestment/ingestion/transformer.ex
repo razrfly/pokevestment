@@ -165,6 +165,9 @@ defmodule Pokevestment.Ingestion.Transformer do
     art_features = FeatureExtractor.compute_art_features(%{rarity: card_raw["rarity"]})
     card = Map.merge(card, art_features)
 
+    energy_features = FeatureExtractor.compute_energy_cost(%{attacks: card_raw["attacks"]})
+    card = Map.merge(card, energy_features)
+
     card_type_attrs =
       types |> Enum.uniq() |> Enum.map(fn type -> %{card_id: card_id, type_name: type} end)
 

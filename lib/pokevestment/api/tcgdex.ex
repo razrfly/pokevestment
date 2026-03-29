@@ -1,8 +1,11 @@
 defmodule Pokevestment.Api.Tcgdex do
   @moduledoc """
-  Tesla HTTP client for the TCGdex API (https://api.tcgdex.net/v2/en).
+  HTTP client for the TCGdex API (https://api.tcgdex.net/v2/en).
 
   No authentication or rate limits required.
+
+  TODO: Migrate from Tesla to Req (limitless.ex already uses Req).
+  Once migrated, remove {:tesla, ...} and {:hackney, ...} from mix.exs.
   """
 
   use Tesla
