@@ -61,7 +61,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
             {:exit, reason} ->
               Logger.warning("PriceSync: task exited: #{inspect(reason)}")
-              {inserted, failed_ids}
+              {inserted, [:exit_timeout | failed_ids]}
           end
         end)
 
@@ -107,18 +107,40 @@ defmodule Pokevestment.Ingestion.PriceSync do
   defp insert_snapshots(snapshots) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    rows =
-      Enum.map(snapshots, fn attrs ->
-        Map.merge(attrs, %{inserted_at: now})
+    {valid_rows, invalid_count} =
+      Enum.reduce(snapshots, {[], 0}, fn attrs, {rows, bad} ->
+        changeset = PriceSnapshot.changeset(%PriceSnapshot{}, attrs)
+
+        if changeset.valid? do
+          row = Map.merge(attrs, %{inserted_at: now})
+          {[row | rows], bad}
+        else
+          Logger.warning(
+            "PriceSync: dropping invalid snapshot for card #{attrs[:card_id]}: " <>
+              "#{inspect(changeset.errors)}"
+          )
+
+          {rows, bad + 1}
+        end
       end)
 
-    {count, _} =
-      Repo.insert_all(PriceSnapshot, rows,
-        on_conflict: :nothing,
-        conflict_target: [:card_id, :source, :variant, :snapshot_date]
-      )
+    if invalid_count > 0 do
+      Logger.warning("PriceSync: skipped #{invalid_count} invalid snapshots in batch")
+    end
 
-    count
+    case valid_rows do
+      [] ->
+        0
+
+      rows ->
+        {count, _} =
+          Repo.insert_all(PriceSnapshot, Enum.reverse(rows),
+            on_conflict: :nothing,
+            conflict_target: [:card_id, :source, :variant, :snapshot_date]
+          )
+
+        count
+    end
   end
 
   defp format_duration(ms) when ms < 1_000, do: "#{ms}ms"
