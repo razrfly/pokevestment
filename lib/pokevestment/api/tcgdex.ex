@@ -34,9 +34,7 @@ defmodule Pokevestment.Api.Tcgdex do
   Supported languages: #{Enum.join(@languages, ", ")}
   """
   def list_cards_for_language(lang) when lang in @languages do
-    Req.new(
-      [base_url: "https://api.tcgdex.net/v2/#{lang}", receive_timeout: 60_000] ++ @req_opts
-    )
+    Req.new([base_url: "https://api.tcgdex.net/v2/#{lang}", receive_timeout: 60_000] ++ @req_opts)
     |> Req.get(url: "/cards")
     |> handle_response()
   end

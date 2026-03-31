@@ -289,5 +289,4 @@ defmodule Pokevestment.Ingestion.TournamentImport do
     |> Repo.all()
     |> MapSet.new()
   end
-
 end

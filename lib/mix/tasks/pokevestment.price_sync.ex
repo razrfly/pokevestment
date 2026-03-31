@@ -38,5 +38,4 @@ defmodule Mix.Tasks.Pokevestment.PriceSync do
         Mix.raise("Price sync failed: #{inspect(reason)}")
     end
   end
-
 end

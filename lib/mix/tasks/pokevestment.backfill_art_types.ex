@@ -76,11 +76,8 @@ defmodule Mix.Tasks.Pokevestment.BackfillArtTypes do
           backfill_batches(total, new_last_id, processed)
 
         {:error, reason} ->
-          Mix.raise(
-            "Batch transaction failed after #{acc} cards: #{reason}"
-          )
+          Mix.raise("Batch transaction failed after #{acc} cards: #{reason}")
       end
     end
   end
-
 end

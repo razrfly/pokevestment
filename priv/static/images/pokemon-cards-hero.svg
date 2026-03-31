@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" fill="none">
+  <!-- Three overlapping card shapes -->
+  <rect x="180" y="40" width="160" height="220" rx="12" fill="#d4d7c8" stroke="#a3a893" stroke-width="2" transform="rotate(-8 260 150)"/>
+  <rect x="320" y="30" width="160" height="220" rx="12" fill="#c8ccba" stroke="#a3a893" stroke-width="2"/>
+  <rect x="460" y="40" width="160" height="220" rx="12" fill="#bcc0ac" stroke="#a3a893" stroke-width="2" transform="rotate(8 540 150)"/>
+  <!-- Card details (simplified) -->
+  <rect x="340" y="60" width="120" height="80" rx="4" fill="#a3a893" opacity="0.4"/>
+  <rect x="340" y="160" width="120" height="12" rx="2" fill="#a3a893" opacity="0.3"/>
+  <rect x="340" y="180" width="80" height="8" rx="2" fill="#a3a893" opacity="0.2"/>
+  <!-- Trend arrow overlay -->
+  <path d="M350 220 L450 180 L550 160 L620 130" stroke="#586e3a" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+  <polygon points="620,130 608,140 615,143" fill="#586e3a" opacity="0.6"/>
+</svg>

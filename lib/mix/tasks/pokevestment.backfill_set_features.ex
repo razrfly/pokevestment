@@ -60,5 +60,4 @@ defmodule Mix.Tasks.Pokevestment.BackfillSetFeatures do
     elapsed = System.monotonic_time(:millisecond) - start
     Mix.shell().info("Backfill complete: #{updated} sets in #{format_duration(elapsed)}")
   end
-
 end

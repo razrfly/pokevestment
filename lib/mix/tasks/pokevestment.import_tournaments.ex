@@ -60,5 +60,4 @@ defmodule Mix.Tasks.Pokevestment.ImportTournaments do
       true -> [format: "STANDARD"]
     end
   end
-
 end

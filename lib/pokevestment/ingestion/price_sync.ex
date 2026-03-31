@@ -149,5 +149,4 @@ defmodule Pokevestment.Ingestion.PriceSync do
         count
     end
   end
-
 end

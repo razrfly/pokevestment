@@ -144,5 +144,4 @@ defmodule Mix.Tasks.Pokevestment.BackfillLanguageCounts do
       Mix.shell().info("Language distribution: #{inspect(dist)}")
     end
   end
-
 end
