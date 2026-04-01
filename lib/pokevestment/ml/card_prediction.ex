@@ -26,7 +26,7 @@ defmodule Pokevestment.ML.CardPrediction do
     timestamps(type: :utc_datetime)
   end
 
-  @required_fields ~w(model_version prediction_date signal)a
+  @required_fields ~w(card_id model_version prediction_date signal)a
   @optional_fields ~w(predicted_fair_value current_price value_ratio signal_strength top_positive_drivers top_negative_drivers umbrella_breakdown)a
 
   @valid_signals ~w(STRONG_BUY BUY HOLD OVERVALUED INSUFFICIENT_DATA)

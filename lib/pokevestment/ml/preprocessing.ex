@@ -196,8 +196,13 @@ defmodule Pokevestment.ML.Preprocessing do
 
   # --- Private Helpers ---
 
-  defp random_split(features, target, val_fraction) do
+  defp random_split(features, target, val_fraction) when val_fraction > 0 and val_fraction < 1 do
     n = DF.n_rows(features)
+
+    if n < 2 do
+      raise ArgumentError, "random_split requires at least 2 rows, got #{n}"
+    end
+
     val_size = n |> Kernel.*(val_fraction) |> round() |> max(1) |> min(n - 1)
     train_size = n - val_size
 
