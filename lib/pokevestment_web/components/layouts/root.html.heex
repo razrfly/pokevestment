@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" class="[scrollbar-gutter:stable]">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title suffix=" · Pokevestment">
+      {assigns[:page_title] || "Home"}
+    </.live_title>
+    <%!-- Fonts: Instrument Serif + Inter --%>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <%!-- Dark mode: respect system preference, applied before paint to prevent flash --%>
+    <script>
+      try {
+        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+          document.documentElement.classList.add("dark");
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      } catch (_) {}
+    </script>
+  </head>
+  <body class="bg-olive-100 text-olive-950 antialiased dark:bg-olive-950 dark:text-olive-100">
+    {@inner_content}
+    <script defer phx-track-static src={~p"/assets/app.js"}>
+    </script>
+  </body>
+</html>

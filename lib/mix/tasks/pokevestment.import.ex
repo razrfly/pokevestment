@@ -84,5 +84,4 @@ defmodule Mix.Tasks.Pokevestment.Import do
   end
 
   defp print_summary(_), do: :ok
-
 end

@@ -366,5 +366,4 @@ defmodule Pokevestment.Ingestion.FullImport do
     |> Repo.all()
     |> MapSet.new()
   end
-
 end

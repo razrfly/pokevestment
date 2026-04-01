@@ -24,7 +24,10 @@ config :pokevestment, PokevestmentWeb.Endpoint,
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "KPCTLkIEMBsMT3fmpD92oTA3ELXT0/VxFTlOjo6PO6H8gy87k/AyLi6Vqk04KCMj",
-  watchers: []
+  watchers: [
+    esbuild: {Esbuild, :install_and_run, [:pokevestment, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:pokevestment, ~w(--watch)]}
+  ]
 
 # ## SSL Support
 #
@@ -49,6 +52,15 @@ config :pokevestment, PokevestmentWeb.Endpoint,
 # configured to run both http and https servers on
 # different ports.
 
+# Watch static and templates for browser reloading.
+config :pokevestment, PokevestmentWeb.Endpoint,
+  live_reload: [
+    patterns: [
+      ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
+      ~r"lib/pokevestment_web/(controllers|live|components)/.*(ex|heex)$"
+    ]
+  ]
+
 # Enable dev routes for dashboard and mailbox
 config :pokevestment, dev_routes: true
 
@@ -61,3 +73,8 @@ config :phoenix, :stacktrace_depth, 20
 
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
+
+# Enable helpful but potentially expensive runtime checks
+config :phoenix_live_view,
+  debug_heex_annotations: true,
+  enable_expensive_runtime_checks: true
