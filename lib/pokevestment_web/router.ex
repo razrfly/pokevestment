@@ -18,6 +18,9 @@ defmodule PokevestmentWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    live "/sets", SetLive.Index, :index
+    live "/sets/:id", SetLive.Show, :show
   end
 
   scope "/api", PokevestmentWeb do

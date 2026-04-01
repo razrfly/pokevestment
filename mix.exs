@@ -54,12 +54,25 @@ defmodule Pokevestment.MixProject do
       {:bandit, "~> 1.5"},
       {:esbuild, "~> 0.9", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
+      {:heroicons,
+       github: "tailwindlabs/heroicons",
+       tag: "v2.2.0",
+       sparse: "optimized",
+       app: false,
+       compile: false,
+       depth: 1},
 
       # HTTP Client
       {:req, "~> 0.5"},
 
       # Background Jobs
       {:oban, "~> 2.17"},
+
+      # ML
+      {:explorer, "~> 0.11"},
+      {:scholar, "~> 0.4"},
+      {:exgboost, "~> 0.5"},
+      {:ex_json_schema, "~> 0.11", override: true},
 
       # Testing
       {:mox, "~> 1.1", only: :test}
