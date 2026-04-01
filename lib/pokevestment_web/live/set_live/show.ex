@@ -42,6 +42,7 @@ defmodule PokevestmentWeb.SetLive.Show do
     {:noreply, assign(socket, predictions: predictions, signal_filter: signal)}
   end
 
+  @impl true
   def handle_event("toggle", %{"card-id" => card_id}, socket) do
     expanded =
       if MapSet.member?(socket.assigns.expanded, card_id),

@@ -60,7 +60,7 @@ defmodule Pokevestment.ML.PriceFeatures do
   end
 
   defp compute_derived(base) do
-    avg = base["price_avg"] || 0
+    avg = base["price_avg"]
     avg1 = base["price_avg1"]
     avg7 = base["price_avg7"]
     avg30 = base["price_avg30"]

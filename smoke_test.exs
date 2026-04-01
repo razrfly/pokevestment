@@ -90,26 +90,35 @@ signal_dist =
 
 total = length(predictions)
 IO.puts("\n  Signal distribution:")
-Enum.each(signal_dist, fn {signal, count} ->
-  pct = Float.round(count / total * 100, 1)
-  bar = String.duplicate("█", round(pct / 2))
-  IO.puts("    #{String.pad_trailing(signal, 20)} #{String.pad_leading(Integer.to_string(count), 6)} (#{String.pad_leading(Float.to_string(pct), 5)}%) #{bar}")
-end)
+if total > 0 do
+  Enum.each(signal_dist, fn {signal, count} ->
+    pct = Float.round(count / total * 100, 1)
+    bar = String.duplicate("█", round(pct / 2))
+    IO.puts("    #{String.pad_trailing(signal, 20)} #{String.pad_leading(Integer.to_string(count), 6)} (#{String.pad_leading(Float.to_string(pct), 5)}%) #{bar}")
+  end)
+else
+  IO.puts("    No predictions generated")
+end
 
 # Value ratio distribution for priced cards
 priced = Enum.filter(predictions, fn p -> p.signal != "INSUFFICIENT_DATA" and p.value_ratio != nil end)
 ratios = Enum.map(priced, fn p -> Decimal.to_float(p.value_ratio) end)
-avg_ratio = Enum.sum(ratios) / length(ratios)
-sorted_ratios = Enum.sort(ratios)
-median_ratio = Enum.at(sorted_ratios, div(length(sorted_ratios), 2))
-min_ratio = List.first(sorted_ratios)
-max_ratio = List.last(sorted_ratios)
 
-IO.puts("\n  Value ratio stats (priced cards):")
-IO.puts("    Min:    #{Float.round(min_ratio, 4)}")
-IO.puts("    Median: #{Float.round(median_ratio, 4)}")
-IO.puts("    Mean:   #{Float.round(avg_ratio, 4)}")
-IO.puts("    Max:    #{Float.round(max_ratio, 4)}")
+if length(ratios) > 0 do
+  avg_ratio = Enum.sum(ratios) / length(ratios)
+  sorted_ratios = Enum.sort(ratios)
+  median_ratio = Enum.at(sorted_ratios, div(length(sorted_ratios), 2))
+  min_ratio = List.first(sorted_ratios)
+  max_ratio = List.last(sorted_ratios)
+
+  IO.puts("\n  Value ratio stats (priced cards):")
+  IO.puts("    Min:    #{Float.round(min_ratio, 4)}")
+  IO.puts("    Median: #{Float.round(median_ratio, 4)}")
+  IO.puts("    Mean:   #{Float.round(avg_ratio, 4)}")
+  IO.puts("    Max:    #{Float.round(max_ratio, 4)}")
+else
+  IO.puts("\n  Value ratio stats: no priced cards to analyze")
+end
 
 IO.puts("\nSTEP 6: Persist to DB")
 {us, {:ok, result}} = :timer.tc(fn -> Predictions.upsert_predictions(predictions) end)

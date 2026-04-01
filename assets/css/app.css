@@ -70,11 +70,7 @@
     @apply bg-olive-100 text-olive-950;
   }
 
-  /* Dark mode body */
-  .dark body,
-  :root[data-theme="dark"] body {
-    @apply bg-olive-950 text-olive-100;
-  }
+  /* Dark mode handled by dark: utilities on <body> in root.html.heex */
 }
 
 /* Phoenix flash messages */

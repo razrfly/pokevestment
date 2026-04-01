@@ -191,8 +191,8 @@ defmodule Pokevestment.ML.Pipeline do
     }
 
     # Round importance values for JSON storage
-    rounded_feat = Map.new(feat_imp, fn {k, v} -> {k, Float.round(v, 6)} end)
-    rounded_umbrella = Map.new(umbrella_imp, fn {k, v} -> {k, Float.round(v, 6)} end)
+    rounded_feat = Map.new(feat_imp, fn {k, v} -> {k, Float.round(v || 0.0, 6)} end)
+    rounded_umbrella = Map.new(umbrella_imp, fn {k, v} -> {k, Float.round(v || 0.0, 6)} end)
 
     attrs = %{
       model_version: version,

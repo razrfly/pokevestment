@@ -59,9 +59,10 @@ defmodule PokevestmentWeb.SetLive.Index do
                 </span>
               </div>
             </div>
-            <div :if={buy_count(set.id, @signal_counts) > 0} class="mt-3">
+            <% count = buy_count(set.id, @signal_counts) %>
+            <div :if={count > 0} class="mt-3">
               <span class="inline-flex items-center rounded-full bg-emerald-700/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">
-                {buy_count(set.id, @signal_counts)} buy signal{if buy_count(set.id, @signal_counts) != 1, do: "s"}
+                {count} buy signal{if count != 1, do: "s"}
               </span>
             </div>
           </.link>

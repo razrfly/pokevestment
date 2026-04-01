@@ -226,9 +226,9 @@ defmodule PokevestmentWeb.LandingComponents do
         <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <%!-- Brand --%>
           <div class="lg:col-span-1">
-            <a href="/" class="font-display text-xl text-olive-950 dark:text-white">
+            <.link href="/" class="font-display text-xl text-olive-950 dark:text-white">
               Pokevestment
-            </a>
+            </.link>
             <p class="mt-3 text-sm text-olive-700 dark:text-olive-400">
               Data-driven Pokemon card investment insights powered by tournament and market data.
             </p>

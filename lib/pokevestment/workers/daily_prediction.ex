@@ -11,8 +11,12 @@ defmodule Pokevestment.Workers.DailyPrediction do
   alias Pokevestment.ML.Pipeline
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}) do
-    case Pipeline.run(version: "v1.0.0") do
+  def perform(%Oban.Job{args: args}) do
+    version =
+      Map.get(args, "version") ||
+        Application.get_env(:pokevestment, :model_version, "v1.0.0")
+
+    case Pipeline.run(version: version) do
       {:ok, _summary} -> :ok
       {:error, reason} -> {:error, reason}
     end
