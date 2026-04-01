@@ -165,7 +165,8 @@ defmodule Pokevestment.ML.FeatureMatrix do
               WHEN source = 'cardmarket' AND variant = 'normal' THEN 1
               WHEN source = 'cardmarket' AND variant = 'holo' THEN 2
               WHEN source = 'tcgplayer' AND variant = 'normal' THEN 3
-              ELSE 4
+              WHEN source = 'tcgplayer' AND variant = 'holofoil' THEN 4
+              ELSE 5
             END
           LIMIT 1
         ) ps ON true

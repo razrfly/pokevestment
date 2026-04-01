@@ -198,7 +198,7 @@ defmodule Pokevestment.ML.Preprocessing do
 
   defp random_split(features, target, val_fraction) do
     n = DF.n_rows(features)
-    val_size = round(n * val_fraction)
+    val_size = n |> Kernel.*(val_fraction) |> round() |> max(1) |> min(n - 1)
     train_size = n - val_size
 
     # Shuffle indices

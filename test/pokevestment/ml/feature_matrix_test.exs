@@ -399,10 +399,8 @@ defmodule Pokevestment.ML.FeatureMatrixTest do
       assert Map.has_key?(meta.encodings, "category")
 
       # Category column should now be integers
-      if "category" in Explorer.DataFrame.names(train_f) do
-        dtype = train_f |> Explorer.DataFrame.pull("category") |> Explorer.Series.dtype()
-        assert dtype in [{:s, 64}, {:u, 32}, :integer]
-      end
+      dtype = train_f |> Explorer.DataFrame.pull("category") |> Explorer.Series.dtype()
+      assert match?({:s, _}, dtype) or match?({:u, _}, dtype) or dtype == :integer
     end
 
     test "encodings contain expected values" do

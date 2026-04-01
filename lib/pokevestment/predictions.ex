@@ -27,7 +27,7 @@ defmodule Pokevestment.Predictions do
         join: c in Card,
         on: c.id == p.card_id,
         where: c.set_id == ^set_id,
-        order_by: [desc: p.signal_strength],
+        order_by: [desc_nulls_last: p.signal_strength],
         limit: ^limit,
         preload: [card: c]
 

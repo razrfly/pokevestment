@@ -1351,10 +1351,6 @@
     background-color: var(--color-olive-100);
     color: var(--color-olive-950);
   }
-  .dark body, :root[data-theme="dark"] body {
-    background-color: var(--color-olive-950);
-    color: var(--color-olive-100);
-  }
 }
 @layer components {
   .flash-group {

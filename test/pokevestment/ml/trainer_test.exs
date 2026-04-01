@@ -309,14 +309,21 @@ defmodule Pokevestment.ML.TrainerTest do
 
   describe "Pipeline.run/1" do
     test "runs full pipeline and persists predictions" do
+      version = "v1.0.0-test-#{System.unique_integer([:positive])}"
+
+      on_exit(fn ->
+        File.rm("priv/models/xgboost_#{version}.json")
+        File.rm("priv/models/xgboost_#{version}")
+      end)
+
       {:ok, summary} = Pipeline.run(
-        version: "v1.0.0-test",
+        version: version,
         num_boost_rounds: 10,
         early_stopping_rounds: 5,
         verbose_eval: false
       )
 
-      assert summary.model_version == "v1.0.0-test"
+      assert summary.model_version == version
       assert summary.predictions_count == 3
       assert is_map(summary.metrics)
       assert summary.metrics.rmse >= 0
@@ -325,7 +332,7 @@ defmodule Pokevestment.ML.TrainerTest do
       assert summary.elapsed_ms > 0
 
       # Model file should exist
-      assert File.exists?("priv/models/xgboost_v1.0.0-test.json") || File.exists?("priv/models/xgboost_v1.0.0-test")
+      assert File.exists?("priv/models/xgboost_#{version}.json") || File.exists?("priv/models/xgboost_#{version}")
 
       # CardPrediction rows in DB
       predictions = Repo.all(CardPrediction)
@@ -335,13 +342,9 @@ defmodule Pokevestment.ML.TrainerTest do
       evaluations = Repo.all(ModelEvaluation)
       assert length(evaluations) == 1
       eval = hd(evaluations)
-      assert eval.model_version == "v1.0.0-test"
+      assert eval.model_version == version
       assert eval.train_rows > 0
       assert eval.val_rows > 0
-
-      # Cleanup model file
-      File.rm("priv/models/xgboost_v1.0.0-test.json")
-      File.rm("priv/models/xgboost_v1.0.0-test")
     end
   end
 end

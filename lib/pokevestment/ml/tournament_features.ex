@@ -80,8 +80,7 @@ defmodule Pokevestment.ML.TournamentFeatures do
         Enum.zip(feature_names, values)
         |> Map.new(fn {name, val} -> {name, val || 0} end)
 
-      meta_trend =
-        (features["meta_share_30d"] || 0) - (features["meta_share_90d"] || 0)
+      meta_trend = features["meta_share_30d"] - features["meta_share_90d"]
 
       {card_id, Map.put(features, "meta_trend", meta_trend)}
     end)
