@@ -64,19 +64,47 @@ defmodule PokevestmentWeb.SetLive.Show do
           <.link navigate={~p"/sets"} class="text-sm text-olive-500 hover:text-olive-700 dark:text-olive-500 dark:hover:text-olive-300">
             ← All Sets
           </.link>
-          <h1 class="mt-2 font-display text-3xl font-medium tracking-tight text-olive-950 dark:text-white sm:text-4xl">
-            {@set.name}
-          </h1>
-          <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-olive-600 dark:text-olive-500">
-            <span :if={@set.release_date}>{Calendar.strftime(@set.release_date, "%B %d, %Y")}</span>
-            <span :if={@set.card_count_total}>· {@set.card_count_total} cards</span>
-            <span :if={@set.era}>· {@set.era}</span>
-            <span
-              :if={@set.legal_standard}
-              class="inline-flex rounded-full bg-olive-200 px-2 py-0.5 text-xs font-medium text-olive-800 dark:bg-olive-800 dark:text-olive-300"
-            >
-              Standard
-            </span>
+          <div class="mt-2 flex items-start gap-5">
+            <div class="flex-shrink-0">
+              <img
+                :if={@set.logo_url}
+                src={"#{@set.logo_url}.png"}
+                alt={"#{@set.name} logo"}
+                loading="lazy"
+                class="h-16 w-auto object-contain sm:h-20"
+              />
+              <img
+                :if={!@set.logo_url && @set.symbol_url}
+                src={"#{@set.symbol_url}.png"}
+                alt={"#{@set.name} symbol"}
+                loading="lazy"
+                class="h-16 w-auto object-contain sm:h-20"
+              />
+              <div
+                :if={!@set.logo_url && !@set.symbol_url}
+                class="flex h-16 w-16 items-center justify-center rounded-lg bg-olive-200 sm:h-20 sm:w-20 dark:bg-olive-800"
+              >
+                <span class="font-display text-2xl font-medium text-olive-600 sm:text-3xl dark:text-olive-400">
+                  {String.first(@set.name)}
+                </span>
+              </div>
+            </div>
+            <div>
+              <h1 class="font-display text-3xl font-medium tracking-tight text-olive-950 dark:text-white sm:text-4xl">
+                {@set.name}
+              </h1>
+              <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-olive-600 dark:text-olive-500">
+                <span :if={@set.release_date}>{Calendar.strftime(@set.release_date, "%B %d, %Y")}</span>
+                <span :if={@set.card_count_total}>· {@set.card_count_total} cards</span>
+                <span :if={@set.era}>· {@set.era}</span>
+                <span
+                  :if={@set.legal_standard}
+                  class="inline-flex rounded-full bg-olive-200 px-2 py-0.5 text-xs font-medium text-olive-800 dark:bg-olive-800 dark:text-olive-300"
+                >
+                  Standard
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
