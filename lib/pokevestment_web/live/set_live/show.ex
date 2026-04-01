@@ -3,6 +3,7 @@ defmodule PokevestmentWeb.SetLive.Show do
 
   import PokevestmentWeb.LandingComponents
   import PokevestmentWeb.PredictionComponents
+  import PokevestmentWeb.SetComponents
 
   alias Pokevestment.Repo
   alias Pokevestment.Cards.Set
@@ -65,30 +66,7 @@ defmodule PokevestmentWeb.SetLive.Show do
             ← All Sets
           </.link>
           <div class="mt-2 flex items-start gap-5">
-            <div class="flex-shrink-0">
-              <img
-                :if={@set.logo_url}
-                src={"#{@set.logo_url}.png"}
-                alt={"#{@set.name} logo"}
-                loading="lazy"
-                class="h-16 w-auto object-contain sm:h-20"
-              />
-              <img
-                :if={!@set.logo_url && @set.symbol_url}
-                src={"#{@set.symbol_url}.png"}
-                alt={"#{@set.name} symbol"}
-                loading="lazy"
-                class="h-16 w-auto object-contain sm:h-20"
-              />
-              <div
-                :if={!@set.logo_url && !@set.symbol_url}
-                class="flex h-16 w-16 items-center justify-center rounded-lg bg-olive-200 sm:h-20 sm:w-20 dark:bg-olive-800"
-              >
-                <span class="font-display text-2xl font-medium text-olive-600 sm:text-3xl dark:text-olive-400">
-                  {String.first(@set.name)}
-                </span>
-              </div>
-            </div>
+            <.set_image set={@set} size={:lg} />
             <div>
               <h1 class="font-display text-3xl font-medium tracking-tight text-olive-950 dark:text-white sm:text-4xl">
                 {@set.name}

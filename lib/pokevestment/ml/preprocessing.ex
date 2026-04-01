@@ -221,4 +221,9 @@ defmodule Pokevestment.ML.Preprocessing do
 
     {train_features, train_target, val_features, val_target}
   end
+
+  defp random_split(_features, _target, val_fraction) do
+    raise ArgumentError,
+          "random_split requires val_fraction to be > 0 and < 1, got #{inspect(val_fraction)}"
+  end
 end
