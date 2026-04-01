@@ -34,5 +34,8 @@ pokevestment-*.tar
 *.swo
 .vscode/
 
+# Trained ML models (reproducible from data)
+/priv/models/
+
 # macOS
 .DS_Store

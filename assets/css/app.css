@@ -1,8 +1,36 @@
 @import "tailwindcss";
 
+/* Self-hosted fonts */
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/instrument-serif-regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/instrument-serif-italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/inter-variable.woff2") format("woff2");
+}
+
 /* Source paths for Tailwind v4 class detection */
 @source "../../lib/pokevestment_web";
 @source "../js";
+
+/* Enable class-based dark mode so dark: utilities respond to class="dark" */
+@variant dark (&:where(.dark, .dark *));
 
 /* LiveView loading state variants */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);

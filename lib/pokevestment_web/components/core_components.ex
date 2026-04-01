@@ -86,6 +86,26 @@ defmodule PokevestmentWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Renders a [Heroicon](https://heroicons.com).
+
+  Heroicons come in three styles – outline, solid, and mini.
+  By default, the outline style is used.
+
+  ## Examples
+
+      <.icon name="hero-x-mark-solid" />
+      <.icon name="hero-arrow-path" class="ml-1 w-3 h-3 motion-safe:animate-spin" />
+  """
+  attr :name, :string, required: true
+  attr :class, :string, default: nil
+
+  def icon(%{name: "hero-" <> _} = assigns) do
+    ~H"""
+    <span class={[@name, @class]} />
+    """
+  end
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do

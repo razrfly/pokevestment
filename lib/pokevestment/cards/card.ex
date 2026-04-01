@@ -61,6 +61,8 @@ defmodule Pokevestment.Cards.Card do
     has_many :card_types, Pokevestment.Cards.CardType
     has_many :card_dex_ids, Pokevestment.Cards.CardDexId
     has_many :price_snapshots, Pokevestment.Pricing.PriceSnapshot
+    has_one :prediction, Pokevestment.ML.CardPrediction, foreign_key: :card_id
+    has_many :prediction_snapshots, Pokevestment.ML.PredictionSnapshot
 
     timestamps(type: :utc_datetime)
   end

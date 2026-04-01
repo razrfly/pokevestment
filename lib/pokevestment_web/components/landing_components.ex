@@ -188,20 +188,23 @@ defmodule PokevestmentWeb.LandingComponents do
     ]}>
       <.container>
         <nav class="flex h-16 items-center justify-between">
-          <a href="/" class="font-display text-xl text-olive-950 dark:text-white">
+          <.link href="/" class="font-display text-xl text-olive-950 dark:text-white">
             Pokevestment
-          </a>
+          </.link>
           <div class="hidden items-center gap-8 sm:flex">
-            <a href="#features" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
+            <.link href="/sets" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
+              Sets
+            </.link>
+            <.link href="#features" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
               Features
-            </a>
-            <a href="#stats" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
+            </.link>
+            <.link href="#stats" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
               Data
-            </a>
-            <a href="#cta" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
+            </.link>
+            <.link href="#cta" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
               About
-            </a>
-            <.button variant="primary" href="#">Get Started</.button>
+            </.link>
+            <.button variant="primary" href="/sets">Get Started</.button>
           </div>
         </nav>
       </.container>
