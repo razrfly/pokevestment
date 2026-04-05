@@ -55,7 +55,7 @@ defmodule PokevestmentWeb.SetLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, expanded: MapSet.new())}
+    {:ok, assign(socket, expanded: MapSet.new(), set_types: [])}
   end
 
   @impl true

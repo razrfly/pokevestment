@@ -164,9 +164,12 @@ defmodule Pokevestment.ML.FeatureMatrix do
             CASE
               WHEN source = 'tcgplayer' AND variant = 'normal' THEN 1
               WHEN source = 'tcgplayer' AND variant = 'holofoil' THEN 2
-              WHEN source = 'cardmarket' AND variant = 'normal' THEN 3
-              WHEN source = 'cardmarket' AND variant = 'holo' THEN 4
-              ELSE 5
+              WHEN source = 'tcgplayer' AND variant = 'reverse-holofoil' THEN 3
+              WHEN source = 'tcgplayer' AND variant = '1st-edition-holofoil' THEN 4
+              WHEN source = 'tcgplayer' AND variant = '1st-edition-normal' THEN 5
+              WHEN source = 'cardmarket' AND variant = 'normal' THEN 6
+              WHEN source = 'cardmarket' AND variant = 'holo' THEN 7
+              ELSE 8
             END
           LIMIT 1
         ) ps ON true
@@ -232,7 +235,10 @@ defmodule Pokevestment.ML.FeatureMatrix do
 
   defp merge_tournament(card, tournament) do
     Enum.reduce(tournament, card, fn {k, v}, acc ->
-      Map.put(acc, String.to_existing_atom(k), v || 0)
+      case safe_to_atom(k) do
+        nil -> acc
+        atom -> Map.put(acc, atom, v || 0)
+      end
     end)
   end
 
@@ -262,7 +268,11 @@ defmodule Pokevestment.ML.FeatureMatrix do
       {"source", v}, acc -> Map.put(acc, :price_source, v)
       {"currency", v}, acc -> Map.put(acc, :price_currency, v)
       {"variant", _v}, acc -> acc
-      {k, v}, acc -> Map.put(acc, String.to_existing_atom(k), v)
+      {k, v}, acc ->
+        case safe_to_atom(k) do
+          nil -> acc
+          atom -> Map.put(acc, atom, v)
+        end
     end)
   end
 
@@ -302,6 +312,13 @@ defmodule Pokevestment.ML.FeatureMatrix do
       end
 
     Map.put(card, :set_age_bucket, bucket)
+  end
+
+  # Safely convert a string key to an existing atom; returns nil if not recognized.
+  defp safe_to_atom(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError -> nil
   end
 
   # --- DataFrame Preparation ---
