@@ -221,7 +221,7 @@ defmodule PokevestmentWeb.HomeLive do
             current_price={@prediction.current_price}
             predicted_fair_value={@prediction.predicted_fair_value}
             value_ratio={@prediction.value_ratio}
-            price_currency={@prediction.price_currency}
+            price_currency={@prediction.price_currency || "USD"}
           />
         </div>
       </div>
@@ -264,9 +264,11 @@ defmodule PokevestmentWeb.HomeLive do
     """
   end
 
-  defp format_number(n) when n >= 1000 do
-    Integer.to_string(div(n, 1000)) <> "," <> String.pad_leading(Integer.to_string(rem(n, 1000)), 3, "0")
+  defp format_number(nil), do: "0"
+
+  defp format_number(n) when is_integer(n) and n >= 1000 do
+    format_number(div(n, 1000)) <> "," <> String.pad_leading(Integer.to_string(rem(n, 1000)), 3, "0")
   end
 
-  defp format_number(n), do: Integer.to_string(n)
+  defp format_number(n) when is_integer(n), do: Integer.to_string(n)
 end

@@ -42,9 +42,11 @@ defmodule Pokevestment.ML.PriceFeatures do
         WHEN ps.source = 'tcgplayer' AND ps.variant = 'normal' THEN 1
         WHEN ps.source = 'tcgplayer' AND ps.variant = 'holofoil' THEN 2
         WHEN ps.source = 'tcgplayer' AND ps.variant = 'reverse-holofoil' THEN 3
-        WHEN ps.source = 'cardmarket' AND ps.variant = 'normal' THEN 4
-        WHEN ps.source = 'cardmarket' AND ps.variant = 'holo' THEN 5
-        ELSE 6
+        WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition-holofoil' THEN 4
+        WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition-normal' THEN 5
+        WHEN ps.source = 'cardmarket' AND ps.variant = 'normal' THEN 6
+        WHEN ps.source = 'cardmarket' AND ps.variant = 'holo' THEN 7
+        ELSE 8
       END
     """
   end
