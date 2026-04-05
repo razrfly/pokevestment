@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.Pokevestment.PriceSync do
   @moduledoc """
-  Manually trigger a daily price sync from TCGdex.
+  Manually trigger a daily price sync via the Pokemon TCG API.
 
   ## Usage
 
@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Pokevestment.PriceSync do
 
   import Pokevestment.Helpers, only: [format_duration: 1]
 
-  @shortdoc "Sync current card prices from TCGdex"
+  @shortdoc "Sync current card prices via Pokemon TCG API"
 
   @impl Mix.Task
   def run(_args) do
@@ -22,16 +22,12 @@ defmodule Mix.Tasks.Pokevestment.PriceSync do
     case Pokevestment.Ingestion.PriceSync.run() do
       {:ok, summary} ->
         Mix.shell().info("\nPrice sync complete in #{format_duration(summary.elapsed_ms)}")
-        Mix.shell().info("  Total cards:        #{summary.total}")
-        Mix.shell().info("  Processed:          #{summary.processed}")
+        Mix.shell().info("  Sets mapped:        #{summary.total}")
+        Mix.shell().info("  Sets processed:     #{summary.processed}")
         Mix.shell().info("  Snapshots inserted: #{summary.snapshots_inserted}")
 
         if summary.failed != [] do
-          Mix.shell().info("  Failed:             #{length(summary.failed)}")
-        end
-
-        if summary.exit_count > 0 do
-          Mix.shell().info("  Timed out:          #{summary.exit_count}")
+          Mix.shell().info("  Failed sets:        #{length(summary.failed)}")
         end
 
       {:error, reason} ->

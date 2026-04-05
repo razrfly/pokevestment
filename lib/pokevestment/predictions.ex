@@ -12,34 +12,68 @@ defmodule Pokevestment.Predictions do
   alias Pokevestment.ML.PredictionSnapshot
 
   @doc """
-  Lists predictions for all cards in a set, sorted by signal_strength DESC.
+  Lists predictions for all cards in a set.
 
   ## Options
     * `:signal` - filter by signal value (e.g. "STRONG_BUY", "BUY")
-    * `:limit` - max results (default 100)
+    * `:sort` - sort key: "strength_desc" (default), "price_desc", "price_asc",
+      "number_asc", "name_asc"
+    * `:search` - card name text search (case-insensitive, partial match)
+    * `:min_price` - minimum current_price filter (Decimal or float)
+    * `:limit` - max results (default 500)
   """
   def list_for_set(set_id, opts \\ []) do
     signal_filter = Keyword.get(opts, :signal)
-    limit = Keyword.get(opts, :limit, 100)
+    sort_key = Keyword.get(opts, :sort, "strength_desc")
+    search = Keyword.get(opts, :search)
+    min_price = Keyword.get(opts, :min_price)
+    limit = Keyword.get(opts, :limit, 500)
 
-    query =
-      from p in CardPrediction,
-        join: c in Card,
-        on: c.id == p.card_id,
-        where: c.set_id == ^set_id,
-        order_by: [desc_nulls_last: p.signal_strength],
-        limit: ^limit,
-        preload: [card: c]
-
-    query =
-      if signal_filter do
-        where(query, [p], p.signal == ^signal_filter)
-      else
-        query
-      end
-
-    Repo.all(query)
+    from(p in CardPrediction,
+      join: c in Card,
+      on: c.id == p.card_id,
+      where: c.set_id == ^set_id,
+      limit: ^limit,
+      preload: [card: c]
+    )
+    |> maybe_filter_signal(signal_filter)
+    |> maybe_filter_search(search)
+    |> maybe_filter_min_price(min_price)
+    |> apply_card_sort(sort_key)
+    |> Repo.all()
   end
+
+  defp maybe_filter_signal(query, nil), do: query
+  defp maybe_filter_signal(query, signal), do: where(query, [p], p.signal == ^signal)
+
+  defp maybe_filter_search(query, nil), do: query
+  defp maybe_filter_search(query, ""), do: query
+
+  defp maybe_filter_search(query, search) do
+    escaped = String.replace(search, ~r/[%_\\]/, fn c -> "\\#{c}" end)
+    where(query, [_, c], ilike(c.name, ^"%#{escaped}%"))
+  end
+
+  defp maybe_filter_min_price(query, nil), do: query
+
+  defp maybe_filter_min_price(query, min_price) do
+    where(query, [p], p.current_price >= ^min_price)
+  end
+
+  defp apply_card_sort(query, "price_desc"),
+    do: order_by(query, [p], desc_nulls_last: p.current_price)
+
+  defp apply_card_sort(query, "price_asc"),
+    do: order_by(query, [p], asc_nulls_last: p.current_price)
+
+  defp apply_card_sort(query, "number_asc"),
+    do: order_by(query, [_, c], asc: c.local_id)
+
+  defp apply_card_sort(query, "name_asc"),
+    do: order_by(query, [_, c], asc: c.name)
+
+  defp apply_card_sort(query, _strength_desc),
+    do: order_by(query, [p], desc_nulls_last: p.signal_strength)
 
   @doc """
   Gets a single card prediction with the card preloaded.

@@ -278,6 +278,103 @@ defmodule Pokevestment.Ingestion.Transformer do
     end
   end
 
+  # --- Pokemon TCG API Price Snapshot Builders ---
+
+  @doc """
+  Build price snapshot attr maps from Pokemon TCG API card data.
+
+  Pokemon TCG API uses slightly different field names than TCGdex:
+  - TCGPlayer: `low`, `mid`, `high`, `market`, `directLow` (vs TCGdex: `lowPrice`, etc.)
+  - CardMarket: `averageSellPrice`, `lowPrice`, `trendPrice`, `avg1`, `avg7`, `avg30`
+  """
+  def build_price_snapshots_from_ptcg(_card_id, nil, nil), do: []
+
+  def build_price_snapshots_from_ptcg(card_id, tcgplayer, cardmarket) do
+    today = Date.utc_today()
+
+    build_ptcg_tcgplayer_snapshots(card_id, tcgplayer, today) ++
+      build_ptcg_cardmarket_snapshots(card_id, cardmarket, today)
+  end
+
+  defp build_ptcg_tcgplayer_snapshots(_card_id, nil, _today), do: []
+
+  defp build_ptcg_tcgplayer_snapshots(card_id, tcgplayer, today) do
+    source_updated_at = parse_datetime(tcgplayer["updatedAt"])
+    prices = tcgplayer["prices"] || %{}
+
+    Enum.flat_map(prices, fn
+      {variant, data} when is_map(data) ->
+        [
+          %{
+            card_id: card_id,
+            source: "tcgplayer",
+            variant: variant,
+            snapshot_date: today,
+            currency: "USD",
+            price_low: to_decimal(data["low"]),
+            price_mid: to_decimal(data["mid"]),
+            price_high: to_decimal(data["high"]),
+            price_market: to_decimal(data["market"]),
+            price_direct_low: to_decimal(data["directLow"]),
+            source_updated_at: source_updated_at
+          }
+        ]
+
+      _ ->
+        []
+    end)
+  end
+
+  defp build_ptcg_cardmarket_snapshots(_card_id, nil, _today), do: []
+
+  defp build_ptcg_cardmarket_snapshots(card_id, cardmarket, today) do
+    source_updated_at = parse_datetime(cardmarket["updatedAt"])
+    prices = cardmarket["prices"] || %{}
+
+    base = %{
+      card_id: card_id,
+      source: "cardmarket",
+      variant: "normal",
+      snapshot_date: today,
+      currency: "EUR",
+      price_low: to_decimal(prices["lowPrice"]),
+      price_avg: to_decimal(prices["averageSellPrice"]),
+      price_trend: to_decimal(prices["trendPrice"]),
+      price_avg1: to_decimal(prices["avg1"]),
+      price_avg7: to_decimal(prices["avg7"]),
+      price_avg30: to_decimal(prices["avg30"]),
+      source_updated_at: source_updated_at
+    }
+
+    holo_values = [
+      prices["reverseHoloAvg1"],
+      prices["reverseHoloLow"],
+      prices["reverseHoloTrend"],
+      prices["reverseHoloSell"]
+    ]
+
+    if Enum.any?(holo_values, &(not is_nil(&1))) do
+      holo = %{
+        card_id: card_id,
+        source: "cardmarket",
+        variant: "holo",
+        snapshot_date: today,
+        currency: "EUR",
+        price_low: to_decimal(prices["reverseHoloLow"]),
+        price_avg: to_decimal(prices["reverseHoloSell"]),
+        price_trend: to_decimal(prices["reverseHoloTrend"]),
+        price_avg1: to_decimal(prices["reverseHoloAvg1"]),
+        price_avg7: to_decimal(prices["reverseHoloAvg7"]),
+        price_avg30: to_decimal(prices["reverseHoloAvg30"]),
+        source_updated_at: source_updated_at
+      }
+
+      [base, holo]
+    else
+      [base]
+    end
+  end
+
   # --- Public Helpers ---
 
   @doc "Parse an ISO 8601 datetime string, returning nil on failure."

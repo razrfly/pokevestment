@@ -11,39 +11,109 @@ defmodule PokevestmentWeb.SetLive.Show do
 
   @signals ["STRONG_BUY", "BUY", "HOLD", "OVERVALUED", "INSUFFICIENT_DATA"]
 
+  @sort_labels [
+    {"Best Buys", "strength_desc"},
+    {"Price: High", "price_desc"},
+    {"Price: Low", "price_asc"},
+    {"Card #", "number_asc"},
+    {"Name A\u2013Z", "name_asc"}
+  ]
+
+  @default_params %{
+    "signal" => "all",
+    "sort" => "strength_desc",
+    "q" => "",
+    "min_price" => ""
+  }
+
+  @input_class "rounded-xl border border-olive-200 bg-olive-50 text-sm text-olive-900 focus:border-olive-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-olive-400 dark:border-olive-700 dark:bg-olive-900/60 dark:text-olive-100 dark:focus:border-olive-600 dark:focus:bg-olive-900"
+
+  # Signal pill colors: {inactive, active}
+  @signal_pill_styles %{
+    "STRONG_BUY" => {
+      "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20",
+      "bg-emerald-700 text-white ring-2 ring-emerald-700/30 dark:bg-emerald-600 dark:text-white dark:ring-emerald-400/30"
+    },
+    "BUY" => {
+      "bg-lime-100 text-lime-700 hover:bg-lime-200 dark:bg-lime-500/10 dark:text-lime-400 dark:hover:bg-lime-500/20",
+      "bg-lime-700 text-white ring-2 ring-lime-700/30 dark:bg-lime-600 dark:text-white dark:ring-lime-400/30"
+    },
+    "HOLD" => {
+      "bg-olive-100 text-olive-700 hover:bg-olive-200 dark:bg-olive-500/10 dark:text-olive-400 dark:hover:bg-olive-500/20",
+      "bg-olive-600 text-white ring-2 ring-olive-600/30 dark:bg-olive-500 dark:text-white dark:ring-olive-400/30"
+    },
+    "OVERVALUED" => {
+      "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20",
+      "bg-red-700 text-white ring-2 ring-red-700/30 dark:bg-red-600 dark:text-white dark:ring-red-400/30"
+    },
+    "INSUFFICIENT_DATA" => {
+      "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-500/10 dark:text-gray-400 dark:hover:bg-gray-500/20",
+      "bg-gray-500 text-white ring-2 ring-gray-500/30 dark:bg-gray-600 dark:text-white dark:ring-gray-400/30"
+    }
+  }
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok, assign(socket, expanded: MapSet.new())}
   end
 
   @impl true
-  def handle_params(%{"id" => id}, _uri, socket) do
+  def handle_params(%{"id" => id} = url_params, _uri, socket) do
     set = Repo.get!(Set, id)
     signal_summary = Predictions.signal_summary_for_set(id)
-    predictions = Predictions.list_for_set(id, limit: 500)
+    params = Map.merge(@default_params, Map.take(url_params, Map.keys(@default_params)))
+    predictions = fetch_predictions(id, params)
+    total_cards = Enum.sum(Map.values(signal_summary))
 
     {:noreply,
      assign(socket,
        set: set,
        signal_summary: signal_summary,
+       total_cards: total_cards,
        predictions: predictions,
-       signal_filter: "all",
+       params: params,
+       sort_labels: @sort_labels,
+       default_params: @default_params,
+       input_class: @input_class,
        page_title: set.name
      )}
   end
 
+  # Search input + min price input changes
   @impl true
-  def handle_event("filter", %{"signal" => signal}, socket) do
-    opts =
-      if signal == "all",
-        do: [limit: 500],
-        else: [signal: signal, limit: 500]
+  def handle_event("filter", form_params, socket) do
+    params =
+      socket.assigns.params
+      |> Map.merge(Map.take(form_params, ~w(q min_price)))
+      |> clean_params()
 
-    predictions = Predictions.list_for_set(socket.assigns.set.id, opts)
-    {:noreply, assign(socket, predictions: predictions, signal_filter: signal)}
+    {:noreply, push_patch(socket, to: ~p"/sets/#{socket.assigns.set.id}?#{params}")}
   end
 
-  @impl true
+  # Sort pill clicks
+  def handle_event("set_sort", %{"sort" => sort}, socket) do
+    params =
+      socket.assigns.params
+      |> Map.put("sort", sort)
+      |> clean_params()
+
+    {:noreply, push_patch(socket, to: ~p"/sets/#{socket.assigns.set.id}?#{params}")}
+  end
+
+  # Signal filter pill clicks
+  def handle_event("set_signal", %{"signal" => signal}, socket) do
+    params =
+      socket.assigns.params
+      |> Map.put("signal", signal)
+      |> clean_params()
+
+    {:noreply, push_patch(socket, to: ~p"/sets/#{socket.assigns.set.id}?#{params}")}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply, push_patch(socket, to: ~p"/sets/#{socket.assigns.set.id}")}
+  end
+
   def handle_event("toggle", %{"card-id" => card_id}, socket) do
     expanded =
       if MapSet.member?(socket.assigns.expanded, card_id),
@@ -63,7 +133,7 @@ defmodule PokevestmentWeb.SetLive.Show do
         <%!-- Header --%>
         <div>
           <.link navigate={~p"/sets"} class="text-sm text-olive-500 hover:text-olive-700 dark:text-olive-500 dark:hover:text-olive-300">
-            ← All Sets
+            &larr; All Sets
           </.link>
           <div class="mt-2 flex items-start gap-5">
             <.set_image set={@set} size={:lg} />
@@ -73,8 +143,8 @@ defmodule PokevestmentWeb.SetLive.Show do
               </h1>
               <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-olive-600 dark:text-olive-500">
                 <span :if={@set.release_date}>{Calendar.strftime(@set.release_date, "%B %d, %Y")}</span>
-                <span :if={@set.card_count_total}>· {@set.card_count_total} cards</span>
-                <span :if={@set.era}>· {@set.era}</span>
+                <span :if={@set.card_count_total}>&middot; {@set.card_count_total} cards</span>
+                <span :if={@set.era}>&middot; {@set.era}</span>
                 <span
                   :if={@set.legal_standard}
                   class="inline-flex rounded-full bg-olive-200 px-2 py-0.5 text-xs font-medium text-olive-800 dark:bg-olive-800 dark:text-olive-300"
@@ -86,50 +156,94 @@ defmodule PokevestmentWeb.SetLive.Show do
           </div>
         </div>
 
-        <%!-- Signal summary pills --%>
-        <div :if={@signal_summary != %{}} class="mt-4 flex flex-wrap gap-2">
-          <span
-            :for={{signal, count} <- Enum.sort_by(@signal_summary, fn {s, _} -> Enum.find_index(@signals, &(&1 == s)) || 99 end)}
-            class="inline-flex items-center gap-1"
-          >
-            <.signal_badge signal={signal} />
-            <span class="text-xs text-olive-600 dark:text-olive-500">{count}</span>
-          </span>
+        <%!-- Unified filter & sort panel --%>
+        <div class="mt-6 space-y-3 rounded-2xl border border-olive-200 bg-white/60 p-4 dark:border-olive-800 dark:bg-olive-900/40">
+          <%!-- Row 1: Search + Min Price --%>
+          <form phx-change="filter" class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            <div class="flex-1 sm:max-w-xs">
+              <input
+                type="text"
+                name="q"
+                value={@params["q"]}
+                placeholder="Search cards..."
+                phx-debounce="300"
+                class={[@input_class, "w-full py-2 px-3"]}
+              />
+            </div>
+            <div class="relative sm:max-w-[10rem]">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-olive-400 dark:text-olive-500">
+                $
+              </span>
+              <input
+                type="text"
+                inputmode="decimal"
+                name="min_price"
+                value={@params["min_price"]}
+                placeholder="Min price"
+                phx-debounce="500"
+                class={[@input_class, "w-full py-2 pl-7 pr-3"]}
+              />
+            </div>
+          </form>
+
+          <%!-- Row 2: Sort pills --%>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button
+              :for={{label, value} <- @sort_labels}
+              type="button"
+              phx-click="set_sort"
+              phx-value-sort={value}
+              class={sort_pill_class(@params["sort"] == value)}
+            >
+              {label}
+            </button>
+          </div>
+
+          <%!-- Divider --%>
+          <div class="border-t border-olive-200 dark:border-olive-700/60" />
+
+          <%!-- Row 3: Colored signal pills with counts --%>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              phx-click="set_signal"
+              phx-value-signal="all"
+              class={sort_pill_class(@params["signal"] == "all")}
+            >
+              All {@total_cards}
+            </button>
+            <button
+              :for={signal <- @signals}
+              type="button"
+              phx-click="set_signal"
+              phx-value-signal={signal}
+              class={signal_pill_class(signal, @params["signal"] == signal)}
+            >
+              {format_signal_label(signal)}
+              <span class="ml-1 tabular-nums">
+                {Map.get(@signal_summary, signal, 0)}
+              </span>
+            </button>
+
+            <button
+              :if={@params != @default_params}
+              type="button"
+              phx-click="clear_filters"
+              class="ml-1 inline-flex items-center gap-1 text-xs font-medium text-olive-500 transition-colors hover:text-olive-700 dark:text-olive-400 dark:hover:text-olive-200"
+            >
+              <.icon name="hero-x-mark" class="h-3 w-3" />
+              Clear
+            </button>
+          </div>
         </div>
 
-        <%!-- Filter bar --%>
-        <div class="mt-6 flex flex-wrap gap-2">
-          <button
-            phx-click="filter"
-            phx-value-signal="all"
-            class={[
-              "rounded-full px-3 py-1 text-sm font-medium transition-colors",
-              if(@signal_filter == "all",
-                do: "bg-olive-950 text-white dark:bg-olive-100 dark:text-olive-950",
-                else: "bg-olive-200 text-olive-700 hover:bg-olive-300 dark:bg-olive-800 dark:text-olive-400 dark:hover:bg-olive-700"
-              )
-            ]}
-          >
-            All
-          </button>
-          <button
-            :for={signal <- @signals}
-            phx-click="filter"
-            phx-value-signal={signal}
-            class={[
-              "rounded-full px-3 py-1 text-sm font-medium transition-colors",
-              if(@signal_filter == signal,
-                do: "bg-olive-950 text-white dark:bg-olive-100 dark:text-olive-950",
-                else: "bg-olive-200 text-olive-700 hover:bg-olive-300 dark:bg-olive-800 dark:text-olive-400 dark:hover:bg-olive-700"
-              )
-            ]}
-          >
-            {format_signal_label(signal)}
-          </button>
-        </div>
+        <%!-- Results count --%>
+        <p class="mt-4 text-sm text-olive-500 dark:text-olive-500">
+          {length(@predictions)} card{if length(@predictions) != 1, do: "s"}
+        </p>
 
         <%!-- Card grid --%>
-        <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div
             :for={prediction <- @predictions}
             class="overflow-hidden rounded-2xl border border-olive-200 bg-white/60 dark:border-olive-800 dark:bg-olive-900/40"
@@ -153,7 +267,7 @@ defmodule PokevestmentWeb.SetLive.Show do
                   </h3>
                   <p class="text-xs text-olive-500 dark:text-olive-500">
                     #{prediction.card.local_id}
-                    <span :if={prediction.card.rarity}> · {prediction.card.rarity}</span>
+                    <span :if={prediction.card.rarity}> &middot; {prediction.card.rarity}</span>
                   </p>
                 </div>
                 <.signal_badge signal={prediction.signal} />
@@ -164,6 +278,7 @@ defmodule PokevestmentWeb.SetLive.Show do
                   current_price={prediction.current_price}
                   predicted_fair_value={prediction.predicted_fair_value}
                   value_ratio={prediction.value_ratio}
+                  price_currency={prediction.price_currency}
                 />
               </div>
 
@@ -173,7 +288,7 @@ defmodule PokevestmentWeb.SetLive.Show do
                 phx-value-card-id={prediction.card_id}
                 class="mt-3 w-full text-center text-xs text-olive-500 hover:text-olive-700 dark:text-olive-500 dark:hover:text-olive-300"
               >
-                {if MapSet.member?(@expanded, prediction.card_id), do: "Hide details ▲", else: "Show details ▼"}
+                {if MapSet.member?(@expanded, prediction.card_id), do: "Hide details \u25B2", else: "Show details \u25BC"}
               </button>
 
               <%!-- Expanded panel --%>
@@ -207,14 +322,87 @@ defmodule PokevestmentWeb.SetLive.Show do
         </div>
 
         <%!-- Empty state --%>
-        <div :if={@predictions == []} class="mt-12 text-center">
-          <p class="text-olive-500 dark:text-olive-500">
-            No predictions available for this set yet.
+        <div :if={@predictions == []} class="mt-12 flex flex-col items-center py-12 text-center">
+          <.icon
+            name="hero-magnifying-glass"
+            class="h-12 w-12 text-olive-300 dark:text-olive-700"
+          />
+          <p class="mt-4 text-lg font-medium text-olive-700 dark:text-olive-400">
+            No cards match your filters
           </p>
+          <button
+            type="button"
+            phx-click="clear_filters"
+            class="mt-3 text-sm font-medium text-olive-600 underline hover:text-olive-900 dark:text-olive-400 dark:hover:text-olive-200"
+          >
+            Clear all filters
+          </button>
         </div>
       </.container>
     </.section>
     """
+  end
+
+  # --- Sort pill styling (olive theme, matches index page) ---
+
+  @active_sort "rounded-full px-3 py-1 text-sm font-medium transition-colors bg-olive-950 text-white dark:bg-olive-100 dark:text-olive-950"
+  @inactive_sort "rounded-full px-3 py-1 text-sm font-medium transition-colors bg-olive-200 text-olive-700 hover:bg-olive-300 dark:bg-olive-800 dark:text-olive-400 dark:hover:bg-olive-700"
+
+  defp sort_pill_class(true), do: @active_sort
+  defp sort_pill_class(_), do: @inactive_sort
+
+  # --- Signal pill styling (colored per signal) ---
+
+  @pill_base "inline-flex items-center rounded-full px-3 py-1 text-sm font-medium transition-colors cursor-pointer"
+
+  defp signal_pill_class(signal, active?) do
+    {inactive, active} = Map.get(@signal_pill_styles, signal, {@inactive_sort, @active_sort})
+    [@pill_base, if(active?, do: active, else: inactive)]
+  end
+
+  # --- Query helpers ---
+
+  defp fetch_predictions(set_id, params) do
+    opts = [limit: 500, sort: params["sort"]]
+
+    opts =
+      if params["signal"] != "all",
+        do: Keyword.put(opts, :signal, params["signal"]),
+        else: opts
+
+    opts =
+      case params["q"] do
+        q when q in [nil, ""] -> opts
+        q -> Keyword.put(opts, :search, q)
+      end
+
+    opts =
+      case parse_min_price(params["min_price"]) do
+        nil -> opts
+        price -> Keyword.put(opts, :min_price, price)
+      end
+
+    Predictions.list_for_set(set_id, opts)
+  end
+
+  defp parse_min_price(nil), do: nil
+  defp parse_min_price(""), do: nil
+
+  defp parse_min_price(str) do
+    str = String.trim(str)
+
+    case Decimal.parse(str) do
+      {d, ""} -> if Decimal.compare(d, Decimal.new(0)) == :gt, do: d
+      _ -> nil
+    end
+  end
+
+  # --- URL helpers ---
+
+  defp clean_params(params) do
+    params
+    |> Enum.reject(fn {k, v} -> Map.get(@default_params, k) == v end)
+    |> Map.new()
   end
 
   defp format_signal_label(signal) do

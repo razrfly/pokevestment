@@ -1,11 +1,11 @@
 defmodule Pokevestment.Workers.DailyPriceSync do
   @moduledoc """
-  Oban worker for daily price synchronization from TCGdex API.
+  Oban worker for daily price synchronization via the Pokemon TCG API.
 
   Runs on a daily cron schedule. Delegates to `PriceSync.run/0` for the actual work.
 
-  - `list_cards/0` failure → returns error → Oban retries (up to 3 attempts)
-  - Individual card failures within a run don't trigger retry — partial success is still `:ok`
+  - SetMapping or API failure → returns error → Oban retries (up to 3 attempts)
+  - Individual set failures within a run don't trigger retry — partial success is still `:ok`
   """
 
   use Oban.Worker, queue: :ingestion, max_attempts: 3

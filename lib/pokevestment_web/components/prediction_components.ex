@@ -91,16 +91,19 @@ defmodule PokevestmentWeb.PredictionComponents do
   attr :current_price, :any, required: true
   attr :predicted_fair_value, :any, required: true
   attr :value_ratio, :any, required: true
+  attr :price_currency, :string, default: "USD"
 
   def value_display(assigns) do
+    assigns = assign(assigns, :symbol, currency_symbol(assigns.price_currency))
+
     ~H"""
     <div class="flex items-center gap-2 text-sm">
       <span class="text-olive-700 dark:text-olive-300">
-        ${format_decimal(@current_price)}
+        {@symbol}{format_decimal(@current_price)}
       </span>
       <span class="text-olive-400 dark:text-olive-600">→</span>
       <span class="font-semibold text-olive-900 dark:text-olive-100">
-        ${format_decimal(@predicted_fair_value)}
+        {@symbol}{format_decimal(@predicted_fair_value)}
       </span>
       <span class={ratio_color(@value_ratio)}>
         ({format_decimal(@value_ratio)}x)
@@ -250,4 +253,9 @@ defmodule PokevestmentWeb.PredictionComponents do
     sign = if v >= 0, do: "+", else: ""
     "#{sign}#{:erlang.float_to_binary(v, decimals: 4)}"
   end
+
+  defp currency_symbol("EUR"), do: "€"
+  defp currency_symbol("USD"), do: "$"
+  defp currency_symbol(nil), do: "$"
+  defp currency_symbol(_), do: "$"
 end

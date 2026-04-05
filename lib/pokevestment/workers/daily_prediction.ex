@@ -24,7 +24,9 @@ defmodule Pokevestment.Workers.DailyPrediction do
         {:error, reason} -> {:error, reason}
       end
     else
-      {:error, reason} -> {:discard, reason}
+      {:error, reason} ->
+        Logger.warning("DailyPrediction discarding job: #{reason}")
+        {:discard, reason}
     end
   end
 

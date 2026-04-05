@@ -127,6 +127,22 @@ defmodule Pokevestment.ML.FeatureMatrixTest do
     # Price snapshots
     today = Date.utc_today()
 
+    # TCGPlayer snapshots (should be preferred after fix)
+    for {card_id, market} <- [{"sv06-040", 90.0}, {"sv06-155", 5.00}, {"sv06-198", 0.20}] do
+      Repo.insert!(%PriceSnapshot{
+        card_id: card_id,
+        source: "tcgplayer",
+        variant: "holofoil",
+        currency: "USD",
+        snapshot_date: today,
+        price_low: Decimal.from_float(market * 0.85),
+        price_mid: Decimal.from_float(market * 0.95),
+        price_high: Decimal.from_float(market * 1.2),
+        price_market: Decimal.from_float(market)
+      })
+    end
+
+    # CardMarket snapshots (fallback)
     for {card_id, avg} <- [{"sv06-040", 45.0}, {"sv06-155", 2.50}, {"sv06-198", 0.10}] do
       Repo.insert!(%PriceSnapshot{
         card_id: card_id,
@@ -305,7 +321,39 @@ defmodule Pokevestment.ML.FeatureMatrixTest do
       assert Enum.all?(log_prices, &is_float/1)
     end
 
-    test "price momentum is computed" do
+    test "TCGPlayer price is preferred over CardMarket" do
+      {:ok, df} = FeatureMatrix.assemble()
+
+      pokemon_row =
+        df
+        |> Explorer.DataFrame.filter_with(fn ldf ->
+          Explorer.Series.equal(ldf["card_id"], "sv06-040")
+        end)
+
+      source =
+        pokemon_row
+        |> Explorer.DataFrame.pull("price_source")
+        |> Explorer.Series.to_list()
+
+      assert hd(source) == "tcgplayer"
+
+      currency =
+        pokemon_row
+        |> Explorer.DataFrame.pull("price_currency")
+        |> Explorer.Series.to_list()
+
+      assert hd(currency) == "USD"
+
+      # canonical_price should be the TCGPlayer market price (~90.0), not CardMarket avg (~45.0)
+      canonical =
+        pokemon_row
+        |> Explorer.DataFrame.pull("canonical_price")
+        |> Explorer.Series.to_list()
+
+      assert hd(canonical) > 80.0
+    end
+
+    test "price momentum is nil for TCGPlayer-sourced cards (no avg1/avg7 data)" do
       {:ok, df} = FeatureMatrix.assemble()
 
       momentum =
@@ -313,8 +361,8 @@ defmodule Pokevestment.ML.FeatureMatrixTest do
         |> Explorer.DataFrame.pull("price_momentum_7d")
         |> Explorer.Series.to_list()
 
-      # avg1 = avg * 1.02, avg7 = avg * 0.95 → momentum ≈ 0.0737
-      assert Enum.all?(momentum, &(not is_nil(&1)))
+      # TCGPlayer is preferred and has no avg1/avg7/avg30, so momentum is nil
+      assert Enum.all?(momentum, &is_nil/1)
     end
 
     test "derived features are correct" do
