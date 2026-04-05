@@ -29,6 +29,9 @@ config :pokevestment, Oban,
   queues: false,
   plugins: false
 
+# Disable basic auth on admin routes so tests can hit them directly
+config :pokevestment, admin_auth_disabled: true
+
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
 

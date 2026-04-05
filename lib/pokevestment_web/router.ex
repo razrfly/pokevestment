@@ -14,6 +14,10 @@ defmodule PokevestmentWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :admin do
+    plug :admin_auth
+  end
+
   scope "/", PokevestmentWeb do
     pipe_through :browser
 
@@ -27,5 +31,25 @@ defmodule PokevestmentWeb.Router do
     pipe_through :api
 
     get "/health", HealthController, :index
+  end
+
+  # Admin dashboard - protected with basic auth
+  import Oban.Web.Router
+
+  scope "/admin" do
+    pipe_through [:browser, :admin]
+
+    oban_dashboard("/oban")
+  end
+
+  defp admin_auth(conn, _opts) do
+    if Application.get_env(:pokevestment, :admin_auth_disabled, false) do
+      conn
+    else
+      username = System.get_env("ADMIN_USERNAME") || "admin"
+      password = System.get_env("ADMIN_PASSWORD") || raise "ADMIN_PASSWORD must be set"
+
+      Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+    end
   end
 end

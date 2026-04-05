@@ -31,6 +31,8 @@ env:
     - SECRET_KEY_BASE
     - DATABASE_URL
     - POKEMON_TCG_API_KEY
+    - ADMIN_USERNAME
+    - ADMIN_PASSWORD
 
 ssh:
   user: holden
