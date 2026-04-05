@@ -299,7 +299,7 @@ defmodule PokevestmentWeb.SetLive.Show do
                   current_price={prediction.current_price}
                   predicted_fair_value={prediction.predicted_fair_value}
                   value_ratio={prediction.value_ratio}
-                  price_currency={prediction.price_currency || "USD"}
+                  price_currency={prediction.price_currency}
                 />
               </div>
 
