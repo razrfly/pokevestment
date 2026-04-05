@@ -40,7 +40,7 @@ defmodule Pokevestment.Api.Tcgdex do
   end
 
   defp client do
-    Req.new([base_url: @base_url, receive_timeout: 30_000] ++ @req_opts)
+    Req.new([base_url: @base_url, receive_timeout: 120_000] ++ @req_opts)
   end
 
   defp handle_response({:ok, %Req.Response{status: status, body: body}})
