@@ -179,6 +179,28 @@ defmodule Pokevestment.Ingestion.Transformer do
     {card, card_type_attrs, card_dex_id_attrs, price_snapshot_attrs}
   end
 
+  @doc """
+  Create minimal card attrs from a set response card entry.
+
+  Used as fallback when the card detail endpoint is unavailable.
+  Only provides required fields (id, name, local_id, set_id, category).
+  """
+  def card_attrs_minimal(card_entry, set_id) do
+    card_id = card_entry["id"]
+    image_base = card_entry["image"]
+
+    card = %{
+      id: card_id,
+      name: truncate(card_entry["name"], 150),
+      local_id: truncate(card_entry["localId"], 20),
+      category: "Pokemon",
+      set_id: set_id,
+      image_url: build_image_url(image_base)
+    }
+
+    {card, [], [], []}
+  end
+
   # --- Price Snapshot Builders ---
 
   @doc "Build price snapshot attr maps from a card's pricing data. Returns [] if nil."

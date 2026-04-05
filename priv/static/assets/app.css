@@ -1318,11 +1318,6 @@
       width: calc(var(--spacing) * 48);
     }
   }
-  .sm\:max-w-\[10rem\] {
-    @media (width >= 40rem) {
-      max-width: 10rem;
-    }
-  }
   .sm\:max-w-xs {
     @media (width >= 40rem) {
       max-width: var(--container-xs);

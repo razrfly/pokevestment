@@ -203,68 +203,57 @@ defmodule Pokevestment.Ingestion.FullImport do
     {:ok, count}
   end
 
-  @doc "Import all cards from TCGdex (~22,755 cards) by iterating over sets."
+  @doc """
+  Import all cards from TCGdex (~22,755 cards) using set detail responses.
+
+  Creates cards with minimal data from set responses (id, name, local_id,
+  set_id, image_url, category). Card detail fields are backfilled later
+  when the card detail API endpoint is available.
+  """
   def import_cards do
     Logger.info("Importing cards...")
     start = System.monotonic_time(:millisecond)
 
-    # Pre-load sets map for secret rare derivation
-    sets_map = load_sets_map()
-    Logger.info("Loaded #{map_size(sets_map)} sets for secret rare derivation")
-
-    # Pre-load species IDs for dex_id FK validation
     species_ids = load_species_ids()
     Logger.info("Loaded #{MapSet.size(species_ids)} species IDs for dex_id validation")
 
-    # Phase 1: Collect all card IDs from set details (sequential, small payloads)
     set_ids = Repo.all(from(s in Set, select: s.id))
-    Logger.info("Collecting card IDs from #{length(set_ids)} sets...")
+    Logger.info("Importing cards from #{length(set_ids)} sets...")
 
-    card_set_pairs =
+    counter = :counters.new(1, [:atomics])
+
+    {imported, failed} =
       set_ids
       |> Task.async_stream(
         fn set_id ->
           case Tcgdex.get_set(set_id) do
             {:ok, %{"cards" => raw_cards}} when is_list(raw_cards) ->
-              cards = Enum.map(raw_cards, fn c -> {c["id"], set_id} end)
-              {:ok, cards}
+              results =
+                Enum.reduce(raw_cards, {0, []}, fn card_entry, {count, fails} ->
+                  {card, types, dex_ids, snapshots} =
+                    Transformer.card_attrs_minimal(card_entry, set_id)
+
+                  case upsert_card(card, types, dex_ids, snapshots, species_ids) do
+                    {:ok, _} ->
+                      :counters.add(counter, 1, 1)
+                      total = :counters.get(counter, 1)
+                      if rem(total, 500) == 0, do: Logger.info("  Cards imported: #{total}")
+                      {count + 1, fails}
+
+                    {:error, reason} ->
+                      Logger.warning("Failed to upsert card #{card[:id]}: #{inspect(reason)}")
+                      {count, [card[:id] | fails]}
+                  end
+                end)
+
+              {:ok, results}
 
             {:ok, _} ->
-              {:ok, []}
+              {:ok, {0, []}}
 
             {:error, reason} ->
               Logger.warning("Failed to fetch set #{set_id}: #{inspect(reason)}")
-              {:ok, []}
-          end
-        end,
-        max_concurrency: 10,
-        timeout: 120_000,
-        on_timeout: :kill_task,
-        ordered: false
-      )
-      |> Enum.flat_map(fn
-        {:ok, {:ok, pairs}} -> pairs
-        _ -> []
-      end)
-
-    total = length(card_set_pairs)
-    Logger.info("Found #{total} cards across #{length(set_ids)} sets. Fetching details...")
-
-    # Phase 2: Fetch all card details concurrently (flat stream, no nesting)
-    counter = :counters.new(1, [:atomics])
-
-    {imported, failed} =
-      card_set_pairs
-      |> Task.async_stream(
-        fn {card_id, set_id} ->
-          set_data = Map.get(sets_map, set_id, %{})
-
-          case Tcgdex.get_card(card_id) do
-            {:ok, raw} ->
-              {:ok, card_id, Transformer.card_attrs(raw, set_data)}
-
-            {:error, reason} ->
-              {:error, card_id, reason}
+              {:ok, {0, []}}
           end
         end,
         max_concurrency: 10,
@@ -273,39 +262,18 @@ defmodule Pokevestment.Ingestion.FullImport do
         ordered: false
       )
       |> Enum.reduce({0, []}, fn
-        {:ok, {:ok, _id, {card, types, dex_ids, snapshots}}}, {count, failed} ->
-          case upsert_card(card, types, dex_ids, snapshots, species_ids) do
-            {:ok, _} ->
-              new_count = count + 1
-              :counters.add(counter, 1, 1)
-              total_done = :counters.get(counter, 1)
+        {:ok, {:ok, {count, fails}}}, {total, all_failed} ->
+          {total + count, all_failed ++ fails}
 
-              if rem(total_done, 500) == 0 do
-                elapsed = System.monotonic_time(:millisecond) - start
-                rate = Float.round(total_done / (elapsed / 1_000), 1)
-                Logger.info("  Cards: #{total_done}/#{total} (#{rate}/s)")
-              end
-
-              {new_count, failed}
-
-            {:error, reason} ->
-              Logger.warning("Failed to upsert card #{card[:id]}: #{inspect(reason)}")
-              {count, [card[:id] | failed]}
-          end
-
-        {:ok, {:error, id, reason}}, {count, failed} ->
-          Logger.warning("Failed to fetch card #{id}: #{inspect(reason)}")
-          {count, [id | failed]}
-
-        {:exit, reason}, {count, failed} ->
-          Logger.warning("Card task crashed: #{inspect(reason)}")
-          {count, failed}
+        {:exit, reason}, {total, all_failed} ->
+          Logger.warning("Set card task crashed: #{inspect(reason)}")
+          {total, all_failed}
       end)
 
     elapsed = System.monotonic_time(:millisecond) - start
     Logger.info("Imported #{imported} cards in #{format_duration(elapsed)}")
     if failed != [], do: Logger.warning("#{length(failed)} cards failed")
-    {:ok, %{imported: imported, failed: failed, total: total}}
+    {:ok, %{imported: imported, failed: failed, total: imported + length(failed)}}
   end
 
   # --- Private: Upsert helpers ---
@@ -387,12 +355,6 @@ defmodule Pokevestment.Ingestion.FullImport do
   end
 
   # --- Private: Data loading ---
-
-  defp load_sets_map do
-    from(s in Set, select: {s.id, %{card_count_official: s.card_count_official}})
-    |> Repo.all()
-    |> Map.new()
-  end
 
   defp load_species_ids do
     from(s in Species, select: s.id)
