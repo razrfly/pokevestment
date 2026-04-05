@@ -29,6 +29,7 @@ pokevestment-*.tar
 .envrc
 .env
 .secret_key_base
+.kamal/secrets
 
 # IDE and editor files
 .idea/
