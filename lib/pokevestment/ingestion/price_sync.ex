@@ -64,7 +64,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
             {:exit, reason} ->
               Logger.warning("PriceSync: task exited: #{inspect(reason)}")
-              {inserted, failed}
+              {inserted, [{:exit, reason} | failed]}
           end
         end)
 

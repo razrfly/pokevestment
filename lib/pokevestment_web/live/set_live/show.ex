@@ -23,7 +23,8 @@ defmodule PokevestmentWeb.SetLive.Show do
     "signal" => "all",
     "sort" => "strength_desc",
     "q" => "",
-    "min_price" => ""
+    "min_price" => "",
+    "type" => "all"
   }
 
   @input_class "rounded-xl border border-olive-200 bg-olive-50 text-sm text-olive-900 focus:border-olive-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-olive-400 dark:border-olive-700 dark:bg-olive-900/60 dark:text-olive-100 dark:focus:border-olive-600 dark:focus:bg-olive-900"
@@ -61,6 +62,7 @@ defmodule PokevestmentWeb.SetLive.Show do
   def handle_params(%{"id" => id} = url_params, _uri, socket) do
     set = Repo.get!(Set, id)
     signal_summary = Predictions.signal_summary_for_set(id)
+    set_types = Predictions.types_for_set(id)
     params = Map.merge(@default_params, Map.take(url_params, Map.keys(@default_params)))
     predictions = fetch_predictions(id, params)
     total_cards = Enum.sum(Map.values(signal_summary))
@@ -70,6 +72,7 @@ defmodule PokevestmentWeb.SetLive.Show do
        set: set,
        signal_summary: signal_summary,
        total_cards: total_cards,
+       set_types: set_types,
        predictions: predictions,
        params: params,
        sort_labels: @sort_labels,
@@ -79,15 +82,15 @@ defmodule PokevestmentWeb.SetLive.Show do
      )}
   end
 
-  # Search input + min price input changes
+  # Search input, min price, and type dropdown changes
   @impl true
   def handle_event("filter", form_params, socket) do
     params =
       socket.assigns.params
-      |> Map.merge(Map.take(form_params, ~w(q min_price)))
+      |> Map.merge(Map.take(form_params, ~w(q min_price type)))
       |> clean_params()
 
-    {:noreply, push_patch(socket, to: ~p"/sets/#{socket.assigns.set.id}?#{params}")}
+    {:noreply, push_patch(socket, to: ~p"/sets/#{socket.assigns.set.id}?#{params}", replace: true)}
   end
 
   # Sort pill clicks
@@ -158,7 +161,7 @@ defmodule PokevestmentWeb.SetLive.Show do
 
         <%!-- Unified filter & sort panel --%>
         <div class="mt-6 space-y-3 rounded-2xl border border-olive-200 bg-white/60 p-4 dark:border-olive-800 dark:bg-olive-900/40">
-          <%!-- Row 1: Search + Min Price --%>
+          <%!-- Row 1: Search + Type dropdown + Min Price --%>
           <form phx-change="filter" class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
             <div class="flex-1 sm:max-w-xs">
               <input
@@ -170,7 +173,25 @@ defmodule PokevestmentWeb.SetLive.Show do
                 class={[@input_class, "w-full py-2 px-3"]}
               />
             </div>
-            <div class="relative sm:max-w-[10rem]">
+
+            <div :if={@set_types != []} class="relative">
+              <select name="type" class={[@input_class, "w-full appearance-none py-2 pl-3 pr-8"]}>
+                <option value="all" selected={@params["type"] == "all"}>All Types</option>
+                <option
+                  :for={type <- @set_types}
+                  value={type}
+                  selected={@params["type"] == type}
+                >
+                  {type}
+                </option>
+              </select>
+              <.icon
+                name="hero-chevron-down-mini"
+                class="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-olive-400 dark:text-olive-500"
+              />
+            </div>
+
+            <div class="relative w-32">
               <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-olive-400 dark:text-olive-500">
                 $
               </span>
@@ -179,7 +200,7 @@ defmodule PokevestmentWeb.SetLive.Show do
                 inputmode="decimal"
                 name="min_price"
                 value={@params["min_price"]}
-                placeholder="Min price"
+                placeholder="Min"
                 phx-debounce="500"
                 class={[@input_class, "w-full py-2 pl-7 pr-3"]}
               />
@@ -278,7 +299,7 @@ defmodule PokevestmentWeb.SetLive.Show do
                   current_price={prediction.current_price}
                   predicted_fair_value={prediction.predicted_fair_value}
                   value_ratio={prediction.value_ratio}
-                  price_currency={prediction.price_currency}
+                  price_currency={prediction.price_currency || "USD"}
                 />
               </div>
 
@@ -381,6 +402,11 @@ defmodule PokevestmentWeb.SetLive.Show do
         nil -> opts
         price -> Keyword.put(opts, :min_price, price)
       end
+
+    opts =
+      if params["type"] not in [nil, "", "all"],
+        do: Keyword.put(opts, :type, params["type"]),
+        else: opts
 
     Predictions.list_for_set(set_id, opts)
   end

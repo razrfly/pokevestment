@@ -7,9 +7,10 @@ defmodule Pokevestment.Predictions do
   import Ecto.Query
 
   alias Pokevestment.Repo
-  alias Pokevestment.Cards.Card
+  alias Pokevestment.Cards.{Card, CardType, Set}
   alias Pokevestment.ML.CardPrediction
   alias Pokevestment.ML.PredictionSnapshot
+  alias Pokevestment.Tournaments.Tournament
 
   @doc """
   Lists predictions for all cards in a set.
@@ -20,6 +21,7 @@ defmodule Pokevestment.Predictions do
       "number_asc", "name_asc"
     * `:search` - card name text search (case-insensitive, partial match)
     * `:min_price` - minimum current_price filter (Decimal or float)
+    * `:type` - Pokemon type filter (e.g. "Fire", "Water")
     * `:limit` - max results (default 500)
   """
   def list_for_set(set_id, opts \\ []) do
@@ -27,6 +29,7 @@ defmodule Pokevestment.Predictions do
     sort_key = Keyword.get(opts, :sort, "strength_desc")
     search = Keyword.get(opts, :search)
     min_price = Keyword.get(opts, :min_price)
+    type_filter = Keyword.get(opts, :type)
     limit = Keyword.get(opts, :limit, 500)
 
     from(p in CardPrediction,
@@ -39,11 +42,13 @@ defmodule Pokevestment.Predictions do
     |> maybe_filter_signal(signal_filter)
     |> maybe_filter_search(search)
     |> maybe_filter_min_price(min_price)
+    |> maybe_filter_type(type_filter)
     |> apply_card_sort(sort_key)
     |> Repo.all()
   end
 
   defp maybe_filter_signal(query, nil), do: query
+  defp maybe_filter_signal(query, ""), do: query
   defp maybe_filter_signal(query, signal), do: where(query, [p], p.signal == ^signal)
 
   defp maybe_filter_search(query, nil), do: query
@@ -55,9 +60,19 @@ defmodule Pokevestment.Predictions do
   end
 
   defp maybe_filter_min_price(query, nil), do: query
+  defp maybe_filter_min_price(query, ""), do: query
 
   defp maybe_filter_min_price(query, min_price) do
     where(query, [p], p.current_price >= ^min_price)
+  end
+
+  defp maybe_filter_type(query, nil), do: query
+  defp maybe_filter_type(query, ""), do: query
+  defp maybe_filter_type(query, "all"), do: query
+
+  defp maybe_filter_type(query, type) do
+    card_ids = from(ct in CardType, where: ct.type_name == ^type, select: ct.card_id)
+    where(query, [_, c], c.id in subquery(card_ids))
   end
 
   defp apply_card_sort(query, "price_desc"),
@@ -103,6 +118,21 @@ defmodule Pokevestment.Predictions do
   end
 
   @doc """
+  Returns the distinct Pokemon types present in a set, sorted alphabetically.
+  """
+  def types_for_set(set_id) do
+    from(ct in CardType,
+      join: c in Card,
+      on: c.id == ct.card_id,
+      where: c.set_id == ^set_id,
+      distinct: true,
+      select: ct.type_name,
+      order_by: ct.type_name
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Returns aggregated signal counts grouped by set_id.
 
   Returns a list of maps: `%{set_id: "sv06", signal: "BUY", count: 12}`.
@@ -117,6 +147,80 @@ defmodule Pokevestment.Predictions do
       select: %{set_id: c.set_id, signal: p.signal, count: count(p.card_id)}
     )
     |> Repo.all()
+  end
+
+  @doc """
+  Returns top BUY/STRONG_BUY cards globally, ordered by signal_strength.
+  Only includes cards that have an image and a current price.
+  """
+  def top_buys(limit \\ 8) do
+    from(p in CardPrediction,
+      join: c in Card,
+      on: c.id == p.card_id,
+      where: p.signal in ["STRONG_BUY", "BUY"],
+      where: not is_nil(c.image_url),
+      where: not is_nil(p.current_price),
+      order_by: [desc_nulls_last: p.signal_strength],
+      limit: ^limit,
+      preload: [card: c]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns signal counts across all predictions.
+  """
+  def global_signal_summary do
+    from(p in CardPrediction,
+      group_by: p.signal,
+      select: {p.signal, count(p.card_id)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  # Promo sets and non-expansion sets excluded from homepage "Hot Sets"
+  @excluded_series ~w(tcgp tk mc misc pop)
+  @excluded_set_ids ~w(sp ex5.5 fut2020 ru1 wp)
+
+  @doc """
+  Returns sets ranked by total BUY + STRONG_BUY prediction count.
+  Excludes promo sets and non-expansion sets.
+  """
+  def top_sets_by_signals(limit \\ 4) do
+    from(p in CardPrediction,
+      join: c in Card,
+      on: c.id == p.card_id,
+      join: s in Set,
+      on: s.id == c.set_id,
+      where: p.signal in ["STRONG_BUY", "BUY"],
+      where: s.series_id not in @excluded_series,
+      where: s.id not in @excluded_set_ids,
+      where: not ilike(s.name, "%promo%"),
+      group_by: s.id,
+      order_by: [desc: count(p.card_id)],
+      limit: ^limit,
+      select: {s, count(p.card_id)}
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns aggregate homepage stats: card count, set count, tournament count.
+  """
+  def homepage_stats do
+    cards = Repo.aggregate(Card, :count)
+    sets = Repo.aggregate(Set, :count)
+    tournaments = Repo.aggregate(Tournament, :count)
+
+    %{cards: cards, sets: sets, tournaments: tournaments}
+  end
+
+  @doc """
+  Returns the most recent prediction_date, or nil if no predictions exist.
+  """
+  def last_prediction_date do
+    Repo.one(from p in CardPrediction, select: max(p.prediction_date))
   end
 
   @doc """

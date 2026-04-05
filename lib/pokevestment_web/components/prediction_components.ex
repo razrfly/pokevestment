@@ -91,7 +91,7 @@ defmodule PokevestmentWeb.PredictionComponents do
   attr :current_price, :any, required: true
   attr :predicted_fair_value, :any, required: true
   attr :value_ratio, :any, required: true
-  attr :price_currency, :string, default: "USD"
+  attr :price_currency, :string, default: nil
 
   def value_display(assigns) do
     assigns = assign(assigns, :symbol, currency_symbol(assigns.price_currency))
@@ -256,6 +256,6 @@ defmodule PokevestmentWeb.PredictionComponents do
 
   defp currency_symbol("EUR"), do: "€"
   defp currency_symbol("USD"), do: "$"
-  defp currency_symbol(nil), do: "$"
-  defp currency_symbol(_), do: "$"
+  defp currency_symbol(nil), do: ""
+  defp currency_symbol(_), do: ""
 end

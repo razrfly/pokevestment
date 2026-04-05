@@ -308,7 +308,7 @@ defmodule Pokevestment.Ingestion.Transformer do
           %{
             card_id: card_id,
             source: "tcgplayer",
-            variant: variant,
+            variant: normalize_ptcg_tcgplayer_variant(variant),
             snapshot_date: today,
             currency: "USD",
             price_low: to_decimal(data["low"]),
@@ -463,6 +463,11 @@ defmodule Pokevestment.Ingestion.Transformer do
   end
 
   defp extract_evolves_from_id(_), do: nil
+
+  defp normalize_ptcg_tcgplayer_variant("reverseHolofoil"), do: "reverse-holofoil"
+  defp normalize_ptcg_tcgplayer_variant("1stEditionHolofoil"), do: "1st-edition-holofoil"
+  defp normalize_ptcg_tcgplayer_variant("1stEditionNormal"), do: "1st-edition-normal"
+  defp normalize_ptcg_tcgplayer_variant(variant), do: variant
 
   defp build_image_url(nil), do: nil
   defp build_image_url(base_url), do: base_url <> "/high.webp"

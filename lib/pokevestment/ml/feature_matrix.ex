@@ -13,19 +13,19 @@ defmodule Pokevestment.ML.FeatureMatrix do
   alias Pokevestment.ML.{TournamentFeatures, PriceFeatures}
 
   @tournament_defaults %{
-    "tournament_appearances" => 0,
-    "total_deck_inclusions" => 0,
-    "avg_copies_per_deck" => 0.0,
-    "meta_share_total" => 0.0,
-    "meta_share_30d" => 0.0,
-    "meta_share_90d" => 0.0,
-    "archetype_count" => 0,
-    "top_8_appearances" => 0,
-    "top_8_rate" => 0.0,
-    "avg_placing" => 0.0,
-    "avg_win_rate" => 0.0,
-    "meta_trend" => 0.0,
-    "weighted_tournament_score" => 0.0
+    tournament_appearances: 0,
+    total_deck_inclusions: 0,
+    avg_copies_per_deck: 0.0,
+    meta_share_total: 0.0,
+    meta_share_30d: 0.0,
+    meta_share_90d: 0.0,
+    archetype_count: 0,
+    top_8_appearances: 0,
+    top_8_rate: 0.0,
+    avg_placing: 0.0,
+    avg_win_rate: 0.0,
+    meta_trend: 0.0,
+    weighted_tournament_score: 0.0
   }
 
   @doc """
@@ -227,14 +227,12 @@ defmodule Pokevestment.ML.FeatureMatrix do
   end
 
   defp merge_tournament(card, nil) do
-    Enum.reduce(@tournament_defaults, card, fn {k, v}, acc ->
-      Map.put(acc, String.to_atom(k), v)
-    end)
+    Map.merge(card, @tournament_defaults)
   end
 
   defp merge_tournament(card, tournament) do
     Enum.reduce(tournament, card, fn {k, v}, acc ->
-      Map.put(acc, String.to_atom(k), v || 0)
+      Map.put(acc, String.to_existing_atom(k), v || 0)
     end)
   end
 
@@ -264,7 +262,7 @@ defmodule Pokevestment.ML.FeatureMatrix do
       {"source", v}, acc -> Map.put(acc, :price_source, v)
       {"currency", v}, acc -> Map.put(acc, :price_currency, v)
       {"variant", _v}, acc -> acc
-      {k, v}, acc -> Map.put(acc, String.to_atom(k), v)
+      {k, v}, acc -> Map.put(acc, String.to_existing_atom(k), v)
     end)
   end
 

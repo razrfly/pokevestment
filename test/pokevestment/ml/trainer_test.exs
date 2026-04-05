@@ -354,12 +354,13 @@ defmodule Pokevestment.ML.TrainerTest do
       predictions = Repo.all(CardPrediction)
       assert length(predictions) == 3
 
-      # Predictions should have price_source and price_currency
-      priced = Enum.filter(predictions, &(&1.signal != "INSUFFICIENT_DATA"))
+      # All cards have prices, so none should be INSUFFICIENT_DATA
+      assert Enum.all?(predictions, &(&1.signal != "INSUFFICIENT_DATA"))
 
-      Enum.each(priced, fn pred ->
-        assert pred.price_source in ["tcgplayer", "cardmarket"]
-        assert pred.price_currency in ["USD", "EUR"]
+      # Every prediction should have tcgplayer/USD metadata (TCGPlayer is preferred source)
+      Enum.each(predictions, fn pred ->
+        assert pred.price_source == "tcgplayer"
+        assert pred.price_currency == "USD"
       end)
 
       # ModelEvaluation row in DB
