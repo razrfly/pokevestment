@@ -7,7 +7,7 @@ servers:
 
 proxy:
   ssl: false
-  host: pokevestment.local
+  host: poke.eventasaur.us
   app_port: 4006
   healthcheck:
     path: /api/health
@@ -24,7 +24,7 @@ builder:
 
 env:
   clear:
-    PHX_HOST: pokevestment.local
+    PHX_HOST: poke.eventasaur.us
     PHX_SERVER: "true"
     PORT: "4006"
   secret:
