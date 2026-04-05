@@ -8,6 +8,8 @@ defmodule Pokevestment.Workers.DailyPrediction do
 
   use Oban.Worker, queue: :default, max_attempts: 2
 
+  require Logger
+
   alias Pokevestment.ML.Pipeline
 
   @version_pattern ~r/^v\d+\.\d+\.\d+(-[\w.]+)?$/
@@ -21,6 +23,8 @@ defmodule Pokevestment.Workers.DailyPrediction do
         {:ok, _summary} -> :ok
         {:error, reason} -> {:error, reason}
       end
+    else
+      {:error, reason} -> {:discard, reason}
     end
   end
 
@@ -39,7 +43,12 @@ defmodule Pokevestment.Workers.DailyPrediction do
   defp validated_default do
     case Application.get_env(:pokevestment, :model_version, @default_version) do
       v when is_binary(v) ->
-        if Regex.match?(@version_pattern, v), do: v, else: @default_version
+        if Regex.match?(@version_pattern, v) do
+          v
+        else
+          Logger.warning("Invalid :model_version config #{inspect(v)}, using #{@default_version}")
+          @default_version
+        end
 
       _ ->
         @default_version

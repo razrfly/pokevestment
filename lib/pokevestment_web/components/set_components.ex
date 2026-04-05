@@ -5,7 +5,7 @@ defmodule PokevestmentWeb.SetComponents do
   use Phoenix.Component
 
   attr :set, :map, required: true
-  attr :size, :atom, default: :sm, values: [:sm, :lg]
+  attr :size, :atom, default: :sm, values: [:sm, :md, :lg]
 
   def set_image(assigns) do
     ~H"""
@@ -36,17 +36,24 @@ defmodule PokevestmentWeb.SetComponents do
     """
   end
 
-  defp img_class(:sm), do: "h-12 w-auto object-contain"
-  defp img_class(:lg), do: "h-16 w-auto object-contain sm:h-20"
+  defp img_class(:sm), do: "h-12 w-16 object-contain"
+  defp img_class(:md), do: "h-24 w-36 object-contain"
+  defp img_class(:lg), do: "h-16 w-20 object-contain sm:h-20 sm:w-24"
 
   defp placeholder_class(:sm),
     do: "flex h-12 w-12 items-center justify-center rounded-lg bg-olive-200 dark:bg-olive-800"
+
+  defp placeholder_class(:md),
+    do: "flex h-24 w-24 items-center justify-center rounded-lg bg-olive-200 dark:bg-olive-800"
 
   defp placeholder_class(:lg),
     do: "flex h-16 w-16 items-center justify-center rounded-lg bg-olive-200 sm:h-20 sm:w-20 dark:bg-olive-800"
 
   defp text_class(:sm),
     do: "font-display text-lg font-medium text-olive-600 dark:text-olive-400"
+
+  defp text_class(:md),
+    do: "font-display text-xl font-medium text-olive-600 dark:text-olive-400"
 
   defp text_class(:lg),
     do: "font-display text-2xl font-medium text-olive-600 sm:text-3xl dark:text-olive-400"
