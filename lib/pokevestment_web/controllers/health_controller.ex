@@ -5,26 +5,34 @@ defmodule PokevestmentWeb.HealthController do
 
   use PokevestmentWeb, :controller
 
+  require Logger
   import Ecto.Query
 
   # 36 hours — missed a full day + 12h buffer
   @stale_threshold_hours 36
 
   def index(conn, _params) do
+    checks = %{
+      database: check_database(),
+      oban: check_oban(),
+      price_data: check_price_freshness(),
+      predictions: check_prediction_freshness()
+    }
+
+    overall =
+      if checks.database.status == "ok",
+        do: :ok,
+        else: :service_unavailable
+
     health_status = %{
-      status: "ok",
+      status: if(overall == :ok, do: "ok", else: "error"),
       timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
       version: Application.spec(:pokevestment, :vsn) |> to_string(),
-      checks: %{
-        database: check_database(),
-        oban: check_oban(),
-        price_data: check_price_freshness(),
-        predictions: check_prediction_freshness()
-      }
+      checks: checks
     }
 
     conn
-    |> put_status(:ok)
+    |> put_status(overall)
     |> json(health_status)
   end
 
@@ -41,7 +49,9 @@ defmodule PokevestmentWeb.HealthController do
       _ -> %{status: "not_configured"}
     end
   rescue
-    _ -> %{status: "not_running"}
+    e ->
+      Logger.error("Health check oban failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+      %{status: "not_running"}
   end
 
   defp check_price_freshness do
@@ -57,7 +67,9 @@ defmodule PokevestmentWeb.HealthController do
         %{status: status, last_snapshot_date: Date.to_iso8601(date), hours_since_last: hours_since}
     end
   rescue
-    _ -> %{status: "error"}
+    e ->
+      Logger.error("Health check price_data failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+      %{status: "error"}
   end
 
   defp check_prediction_freshness do
@@ -82,7 +94,9 @@ defmodule PokevestmentWeb.HealthController do
         }
     end
   rescue
-    _ -> %{status: "error"}
+    e ->
+      Logger.error("Health check predictions failed: #{Exception.format(:error, e, __STACKTRACE__)}")
+      %{status: "error"}
   end
 
   defp hours_since_date(date) do
