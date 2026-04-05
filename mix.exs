@@ -75,7 +75,8 @@ defmodule Pokevestment.MixProject do
       {:ex_json_schema, "~> 0.11", override: true},
 
       # Testing
-      {:mox, "~> 1.1", only: :test}
+      {:mox, "~> 1.1", only: :test},
+      {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
 

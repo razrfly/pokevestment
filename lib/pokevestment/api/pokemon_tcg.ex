@@ -10,15 +10,30 @@ defmodule Pokevestment.Api.PokemonTcg do
   @base_url "https://api.pokemontcg.io/v2"
   @req_opts [retry: :transient, max_retries: 3]
 
-  @doc "List all sets with id, name, and ptcgoCode."
+  @doc "List all sets with id, name, and ptcgoCode. Paginates automatically."
   def list_sets do
-    client()
-    |> Req.get(url: "/sets", params: [select: "id,name,ptcgoCode", pageSize: 250])
-    |> handle_response()
-    |> case do
-      {:ok, %{"data" => data}} -> {:ok, data}
-      {:ok, other} -> {:ok, other}
-      error -> error
+    fetch_all_sets(1, [])
+  end
+
+  defp fetch_all_sets(page, acc) do
+    params = [select: "id,name,ptcgoCode", pageSize: 250, page: page]
+
+    case client() |> Req.get(url: "/sets", params: params) |> handle_response() do
+      {:ok, %{"data" => data, "totalCount" => total}} ->
+        all = acc ++ data
+        fetched = page * 250
+
+        if fetched < total do
+          fetch_all_sets(page + 1, all)
+        else
+          {:ok, all}
+        end
+
+      {:ok, %{"data" => data}} ->
+        {:ok, acc ++ data}
+
+      error ->
+        error
     end
   end
 

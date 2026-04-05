@@ -168,7 +168,9 @@ defmodule Pokevestment.ML.Scorer do
         signal: "INSUFFICIENT_DATA",
         top_positive_drivers: %{},
         top_negative_drivers: %{},
-        umbrella_breakdown: %{}
+        umbrella_breakdown: %{},
+        price_source: nil,
+        price_currency: nil
       }
     end)
   end
