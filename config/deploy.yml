@@ -1,0 +1,47 @@
+service: pokevestment
+image: razrfly/pokevestment
+
+servers:
+  web:
+    - 192.168.1.205
+
+proxy:
+  ssl: false
+  host: pokevestment.local
+  app_port: 4006
+  healthcheck:
+    path: /api/health
+    interval: 3
+
+registry:
+  server: ghcr.io
+  username: razrfly
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: arm64
+
+env:
+  clear:
+    PHX_HOST: pokevestment.local
+    PHX_SERVER: "true"
+    PORT: "4006"
+  secret:
+    - SECRET_KEY_BASE
+    - DATABASE_URL
+    - POKEMON_TCG_API_KEY
+
+ssh:
+  user: holden
+
+logging:
+  driver: json-file
+  options:
+    max-size: 50m
+    max-file: "3"
+
+aliases:
+  shell: app exec --interactive --reuse "bash"
+  logs: app logs
+  console: app exec --interactive --reuse "/app/bin/pokevestment remote"
