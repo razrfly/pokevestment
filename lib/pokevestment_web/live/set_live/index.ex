@@ -3,6 +3,7 @@ defmodule PokevestmentWeb.SetLive.Index do
 
   import Ecto.Query
   import PokevestmentWeb.LandingComponents
+  import PokevestmentWeb.SetComponents
 
   alias Pokevestment.Repo
   alias Pokevestment.Cards.Set
@@ -37,30 +38,7 @@ defmodule PokevestmentWeb.SetLive.Index do
             class="group rounded-2xl border border-olive-200 bg-white/60 p-6 transition-all hover:border-olive-400 hover:shadow-md dark:border-olive-800 dark:bg-olive-900/40 dark:hover:border-olive-600"
           >
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0">
-                <img
-                  :if={set.logo_url}
-                  src={"#{set.logo_url}.png"}
-                  alt={"#{set.name} logo"}
-                  loading="lazy"
-                  class="h-12 w-auto object-contain"
-                />
-                <img
-                  :if={!set.logo_url && set.symbol_url}
-                  src={"#{set.symbol_url}.png"}
-                  alt={"#{set.name} symbol"}
-                  loading="lazy"
-                  class="h-12 w-auto object-contain"
-                />
-                <div
-                  :if={!set.logo_url && !set.symbol_url}
-                  class="flex h-12 w-12 items-center justify-center rounded-lg bg-olive-200 dark:bg-olive-800"
-                >
-                  <span class="font-display text-lg font-medium text-olive-600 dark:text-olive-400">
-                    {String.first(set.name)}
-                  </span>
-                </div>
-              </div>
+              <.set_image set={set} size={:sm} />
               <div class="flex min-w-0 flex-1 items-start justify-between">
                 <div class="min-w-0 flex-1">
                   <h3 class="font-display text-lg font-medium text-olive-950 group-hover:text-olive-700 dark:text-white dark:group-hover:text-olive-300">
