@@ -38,7 +38,7 @@ defmodule PokevestmentWeb.SetComponents do
 
   defp img_class(:sm), do: "h-12 w-16 object-contain"
   defp img_class(:md), do: "h-24 w-36 object-contain"
-  defp img_class(:lg), do: "h-16 w-20 object-contain sm:h-20 sm:w-24"
+  defp img_class(:lg), do: "h-28 w-40 object-contain sm:h-32 sm:w-48"
 
   defp placeholder_class(:sm),
     do: "flex h-12 w-12 items-center justify-center rounded-lg bg-olive-200 dark:bg-olive-800"
@@ -47,7 +47,7 @@ defmodule PokevestmentWeb.SetComponents do
     do: "flex h-24 w-24 items-center justify-center rounded-lg bg-olive-200 dark:bg-olive-800"
 
   defp placeholder_class(:lg),
-    do: "flex h-16 w-16 items-center justify-center rounded-lg bg-olive-200 sm:h-20 sm:w-20 dark:bg-olive-800"
+    do: "flex h-28 w-28 items-center justify-center rounded-lg bg-olive-200 sm:h-32 sm:w-32 dark:bg-olive-800"
 
   defp text_class(:sm),
     do: "font-display text-lg font-medium text-olive-600 dark:text-olive-400"

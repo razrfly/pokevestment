@@ -145,27 +145,27 @@ defmodule Pokevestment.ML.FeatureMatrix do
   end
 
   defp illustrator_stats do
-    # Frequency count per illustrator and average price
+    # Frequency count per illustrator and average price (TCGPlayer-first)
     %{rows: rows} =
       Repo.query!(
         """
         SELECT
           c.illustrator,
           COUNT(*) AS frequency,
-          AVG(ps.price_avg::float) AS avg_price
+          AVG(ps.best_price::float) AS avg_price
         FROM cards c
         LEFT JOIN LATERAL (
-          SELECT price_avg
+          SELECT COALESCE(price_market, price_avg) AS best_price
           FROM price_snapshots
           WHERE card_id = c.id
-            AND snapshot_date = (SELECT MAX(snapshot_date) FROM price_snapshots)
-            AND price_avg IS NOT NULL AND price_avg > 0
-          ORDER BY
+            AND COALESCE(price_market, price_avg) IS NOT NULL
+            AND COALESCE(price_market, price_avg) > 0
+          ORDER BY snapshot_date DESC,
             CASE
-              WHEN source = 'cardmarket' AND variant = 'normal' THEN 1
-              WHEN source = 'cardmarket' AND variant = 'holo' THEN 2
-              WHEN source = 'tcgplayer' AND variant = 'normal' THEN 3
-              WHEN source = 'tcgplayer' AND variant = 'holofoil' THEN 4
+              WHEN source = 'tcgplayer' AND variant = 'normal' THEN 1
+              WHEN source = 'tcgplayer' AND variant = 'holofoil' THEN 2
+              WHEN source = 'cardmarket' AND variant = 'normal' THEN 3
+              WHEN source = 'cardmarket' AND variant = 'holo' THEN 4
               ELSE 5
             END
           LIMIT 1
@@ -240,6 +240,7 @@ defmodule Pokevestment.ML.FeatureMatrix do
 
   defp merge_price(card, nil) do
     Map.merge(card, %{
+      canonical_price: nil,
       price_avg: nil,
       price_low: nil,
       price_high: nil,
@@ -252,13 +253,16 @@ defmodule Pokevestment.ML.FeatureMatrix do
       price_momentum_7d: nil,
       price_momentum_30d: nil,
       price_volatility: nil,
-      log_price: nil
+      log_price: nil,
+      price_source: nil,
+      price_currency: nil
     })
   end
 
   defp merge_price(card, price) do
     Enum.reduce(price, card, fn
-      {"source", _v}, acc -> acc
+      {"source", v}, acc -> Map.put(acc, :price_source, v)
+      {"currency", v}, acc -> Map.put(acc, :price_currency, v)
       {"variant", _v}, acc -> acc
       {k, v}, acc -> Map.put(acc, String.to_atom(k), v)
     end)

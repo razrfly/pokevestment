@@ -125,6 +125,22 @@ defmodule Pokevestment.ML.TrainerTest do
     # Price snapshots
     today = Date.utc_today()
 
+    # TCGPlayer snapshots (should be preferred)
+    for {card_id, market} <- [{"sv06-040", 90.0}, {"sv06-155", 5.00}, {"sv06-198", 0.20}] do
+      Repo.insert!(%PriceSnapshot{
+        card_id: card_id,
+        source: "tcgplayer",
+        variant: "holofoil",
+        currency: "USD",
+        snapshot_date: today,
+        price_low: Decimal.from_float(market * 0.85),
+        price_mid: Decimal.from_float(market * 0.95),
+        price_high: Decimal.from_float(market * 1.2),
+        price_market: Decimal.from_float(market)
+      })
+    end
+
+    # CardMarket snapshots (fallback)
     for {card_id, avg} <- [{"sv06-040", 45.0}, {"sv06-155", 2.50}, {"sv06-198", 0.10}] do
       Repo.insert!(%PriceSnapshot{
         card_id: card_id,
@@ -337,6 +353,14 @@ defmodule Pokevestment.ML.TrainerTest do
       # CardPrediction rows in DB
       predictions = Repo.all(CardPrediction)
       assert length(predictions) == 3
+
+      # Predictions should have price_source and price_currency
+      priced = Enum.filter(predictions, &(&1.signal != "INSUFFICIENT_DATA"))
+
+      Enum.each(priced, fn pred ->
+        assert pred.price_source in ["tcgplayer", "cardmarket"]
+        assert pred.price_currency in ["USD", "EUR"]
+      end)
 
       # ModelEvaluation row in DB
       evaluations = Repo.all(ModelEvaluation)

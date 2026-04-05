@@ -9,7 +9,14 @@ defmodule Pokevestment.ML.Preprocessing do
 
   @categorical_columns ~w(category rarity era energy_type stage art_type set_age_bucket growth_rate)
   @boolean_columns ~w(has_ability is_full_art is_alternate_art is_secret_rare first_edition is_shadowless has_first_edition_stamp legal_standard legal_expanded is_legendary is_mythical is_baby has_evolution)
-  @drop_columns ~w(card_id)
+  # Drop identifier columns + raw price columns (target leakage — the model must
+  # predict fair value from card fundamentals, not from the current price itself).
+  # Derived features (momentum, volatility) are kept as valid trend signals.
+  @drop_columns ~w(
+    card_id canonical_price price_source price_currency
+    price_low price_high price_mid price_market price_avg
+    price_trend price_avg1 price_avg7 price_avg30
+  )
   @target_column "log_price"
 
   def categorical_columns, do: @categorical_columns
@@ -158,16 +165,7 @@ defmodule Pokevestment.ML.Preprocessing do
       "avg_win_rate" => "tournament_meta",
       "meta_trend" => "tournament_meta",
       "weighted_tournament_score" => "tournament_meta",
-      # Price momentum
-      "price_avg" => "price_momentum",
-      "price_low" => "price_momentum",
-      "price_high" => "price_momentum",
-      "price_mid" => "price_momentum",
-      "price_market" => "price_momentum",
-      "price_trend" => "price_momentum",
-      "price_avg1" => "price_momentum",
-      "price_avg7" => "price_momentum",
-      "price_avg30" => "price_momentum",
+      # Price momentum (only derived features — raw prices are dropped to avoid leakage)
       "price_momentum_7d" => "price_momentum",
       "price_momentum_30d" => "price_momentum",
       "price_volatility" => "price_momentum",

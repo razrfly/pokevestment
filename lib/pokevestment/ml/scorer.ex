@@ -54,7 +54,17 @@ defmodule Pokevestment.ML.Scorer do
 
   defp score_priced_cards(booster, df, feature_columns, encodings, version, prediction_date) do
     card_ids = df |> DF.pull("card_id") |> Series.to_list()
-    current_prices = df |> DF.pull("price_avg") |> Series.to_list()
+    current_prices = df |> DF.pull("canonical_price") |> Series.to_list()
+
+    price_sources =
+      if "price_source" in DF.names(df),
+        do: df |> DF.pull("price_source") |> Series.to_list(),
+        else: List.duplicate(nil, length(card_ids))
+
+    price_currencies =
+      if "price_currency" in DF.names(df),
+        do: df |> DF.pull("price_currency") |> Series.to_list(),
+        else: List.duplicate(nil, length(card_ids))
 
     # Encode the DataFrame using training-time encodings
     encoded_df = encode_for_scoring(df, encodings)
@@ -135,7 +145,9 @@ defmodule Pokevestment.ML.Scorer do
           signal: signal,
           top_positive_drivers: top_positive,
           top_negative_drivers: top_negative,
-          umbrella_breakdown: umbrella_breakdown
+          umbrella_breakdown: umbrella_breakdown,
+          price_source: Enum.at(price_sources, global_idx),
+          price_currency: Enum.at(price_currencies, global_idx)
         }
       end)
     end)
