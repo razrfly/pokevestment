@@ -22,7 +22,7 @@ FROM ${BUILDER_IMAGE} as builder
 # install build dependencies
 # - build-essential, git, cmake: required for EXGBoost NIF (compiles XGBoost from source)
 # - Explorer uses rustler_precompiled with aarch64-unknown-linux-gnu binary, no Rust needed
-RUN apt-get update -y && apt-get install -y build-essential git cmake \
+RUN apt-get update -y && apt-get install -y --no-install-recommends build-essential git cmake \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # prepare build dir
@@ -69,7 +69,7 @@ RUN mix release
 FROM ${RUNNER_IMAGE}
 
 RUN apt-get update -y && \
-  apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates \
+  apt-get install -y --no-install-recommends libstdc++6 openssl libncurses5 locales ca-certificates \
   && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale
