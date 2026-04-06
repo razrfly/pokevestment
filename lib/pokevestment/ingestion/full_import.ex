@@ -403,8 +403,11 @@ defmodule Pokevestment.Ingestion.FullImport do
             set_data = Map.get(sets_map, set_id, %{})
 
             Enum.reduce(set_card_ids, {0, []}, fn card_id, {count, fails} ->
-              case Tcgdex.get_card(card_id) do
-                {:ok, card_raw} ->
+              # Use a task with 15s timeout to skip unresponsive cards quickly
+              task = Task.async(fn -> Tcgdex.get_card(card_id) end)
+
+              case Task.yield(task, 15_000) || Task.shutdown(task) do
+                {:ok, {:ok, card_raw}} ->
                   {card, types, dex_ids, snapshots} =
                     Transformer.card_attrs(card_raw, set_data)
 
@@ -424,8 +427,11 @@ defmodule Pokevestment.Ingestion.FullImport do
                       {count, [card_id | fails]}
                   end
 
-                {:error, reason} ->
-                  Logger.warning("Failed to fetch card #{card_id}: #{inspect(reason)}")
+                {:ok, {:error, _reason}} ->
+                  {count, [card_id | fails]}
+
+                nil ->
+                  # Timed out — skip this card
                   {count, [card_id | fails]}
               end
             end)
