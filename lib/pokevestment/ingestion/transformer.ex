@@ -193,7 +193,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       id: card_id,
       name: truncate(card_entry["name"], 150),
       local_id: truncate(card_entry["localId"], 20),
-      category: "Pokemon",
+      category: truncate(card_entry["category"] || "Pokemon", 20),
       set_id: set_id,
       image_url: build_image_url(image_base)
     }
