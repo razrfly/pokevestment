@@ -7,7 +7,7 @@ servers:
 
 proxy:
   ssl: false
-  host: pokevestment.local
+  host: poke.eventasaur.us
   app_port: 4006
   healthcheck:
     path: /api/health
@@ -24,13 +24,15 @@ builder:
 
 env:
   clear:
-    PHX_HOST: pokevestment.local
+    PHX_HOST: poke.eventasaur.us
     PHX_SERVER: "true"
     PORT: "4006"
   secret:
     - SECRET_KEY_BASE
     - DATABASE_URL
     - POKEMON_TCG_API_KEY
+    - ADMIN_USERNAME
+    - ADMIN_PASSWORD
 
 ssh:
   user: holden

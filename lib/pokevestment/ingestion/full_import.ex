@@ -203,76 +203,77 @@ defmodule Pokevestment.Ingestion.FullImport do
     {:ok, count}
   end
 
-  @doc "Import all cards from TCGdex (~22,755 cards) with concurrent detail fetching."
+  @doc """
+  Import all cards from TCGdex (~22,755 cards) using set detail responses.
+
+  Creates cards with minimal data from set responses (id, name, local_id,
+  set_id, image_url, category). Card detail fields are backfilled later
+  when the card detail API endpoint is available.
+  """
   def import_cards do
     Logger.info("Importing cards...")
     start = System.monotonic_time(:millisecond)
 
-    # Pre-load sets map for secret rare derivation
-    sets_map = load_sets_map()
-    Logger.info("Loaded #{map_size(sets_map)} sets for secret rare derivation")
-
-    # Pre-load species IDs for dex_id FK validation
     species_ids = load_species_ids()
     Logger.info("Loaded #{MapSet.size(species_ids)} species IDs for dex_id validation")
 
-    with {:ok, raw_cards} <- Tcgdex.list_cards() do
-      card_ids = Enum.map(raw_cards, & &1["id"])
-      total = length(card_ids)
-      Logger.info("Fetching details for #{total} cards...")
+    set_ids = Repo.all(from(s in Set, select: s.id))
+    Logger.info("Importing cards from #{length(set_ids)} sets...")
 
-      {imported, failed} =
-        card_ids
-        |> Task.async_stream(
-          fn id ->
-            case Tcgdex.get_card(id) do
-              {:ok, raw} ->
-                set_id = get_in(raw, ["set", "id"])
-                set_data = Map.get(sets_map, set_id, %{})
-                {:ok, id, Transformer.card_attrs(raw, set_data)}
+    counter = :counters.new(1, [:atomics])
 
-              {:error, reason} ->
-                {:error, id, reason}
-            end
-          end,
-          max_concurrency: 10,
-          timeout: 120_000,
-          on_timeout: :kill_task,
-          ordered: false
-        )
-        |> Enum.reduce({0, []}, fn
-          {:ok, {:ok, _id, {card, types, dex_ids, snapshots}}}, {count, failed} ->
-            case upsert_card(card, types, dex_ids, snapshots, species_ids) do
-              {:ok, _} ->
-                new_count = count + 1
+    {imported, failed} =
+      set_ids
+      |> Task.async_stream(
+        fn set_id ->
+          case Tcgdex.get_set(set_id) do
+            {:ok, %{"cards" => raw_cards}} when is_list(raw_cards) ->
+              results =
+                Enum.reduce(raw_cards, {0, []}, fn card_entry, {count, fails} ->
+                  {card, types, dex_ids, snapshots} =
+                    Transformer.card_attrs_minimal(card_entry, set_id)
 
-                if rem(new_count, 100) == 0 do
-                  elapsed = System.monotonic_time(:millisecond) - start
-                  rate = Float.round(new_count / (elapsed / 1_000), 1)
-                  Logger.info("  Cards: #{new_count}/#{total} (#{rate}/s)")
-                end
+                  case upsert_card(card, types, dex_ids, snapshots, species_ids) do
+                    {:ok, _} ->
+                      :counters.add(counter, 1, 1)
+                      total = :counters.get(counter, 1)
+                      if rem(total, 500) == 0, do: Logger.info("  Cards imported: #{total}")
+                      {count + 1, fails}
 
-                {new_count, failed}
+                    {:error, reason} ->
+                      Logger.warning("Failed to upsert card #{card[:id]}: #{inspect(reason)}")
+                      {count, [card[:id] | fails]}
+                  end
+                end)
 
-              {:error, reason} ->
-                Logger.warning("Failed to upsert card #{card[:id]}: #{inspect(reason)}")
-                {count, [card[:id] | failed]}
-            end
+              {:ok, results}
 
-          {:ok, {:error, id, reason}}, {count, failed} ->
-            Logger.warning("Failed to fetch card #{id}: #{inspect(reason)}")
-            {count, [id | failed]}
+            {:ok, _} ->
+              {:ok, {0, []}}
 
-          {:exit, reason}, {count, failed} ->
-            Logger.warning("Card task crashed: #{inspect(reason)}")
-            {count, failed}
-        end)
+            {:error, reason} ->
+              Logger.warning("Failed to fetch set #{set_id}: #{inspect(reason)}")
+              {:ok, {0, []}}
+          end
+        end,
+        max_concurrency: 10,
+        timeout: 120_000,
+        on_timeout: :kill_task,
+        ordered: false
+      )
+      |> Enum.reduce({0, []}, fn
+        {:ok, {:ok, {count, fails}}}, {total, all_failed} ->
+          {total + count, all_failed ++ fails}
 
-      elapsed = System.monotonic_time(:millisecond) - start
-      Logger.info("Imported #{imported} cards in #{format_duration(elapsed)}")
-      if failed != [], do: Logger.warning("#{length(failed)} cards failed")
-      {:ok, %{imported: imported, failed: failed, total: total}}
-    end
+        {:exit, reason}, {total, all_failed} ->
+          Logger.warning("Set card task crashed: #{inspect(reason)}")
+          {total, all_failed}
+      end)
+
+    elapsed = System.monotonic_time(:millisecond) - start
+    Logger.info("Imported #{imported} cards in #{format_duration(elapsed)}")
+    if failed != [], do: Logger.warning("#{length(failed)} cards failed")
+    {:ok, %{imported: imported, failed: failed, total: imported + length(failed)}}
   end
 
   # --- Private: Upsert helpers ---
@@ -351,6 +352,108 @@ defmodule Pokevestment.Ingestion.FullImport do
     e ->
       Logger.warning("Exception upserting card #{card_attrs[:id]}: #{Exception.message(e)}")
       {:error, Exception.message(e)}
+  end
+
+  @doc """
+  Backfill full card details from TCGdex card detail API.
+
+  Fetches `/cards/{id}` for every card missing rarity data and updates with
+  full attributes (rarity, HP, stage, illustrator, types, dex_ids, etc.).
+  Uses the same `upsert_card` path as the original import.
+  """
+  def backfill_card_details do
+    Logger.info("Backfilling card details from TCGdex...")
+    start = System.monotonic_time(:millisecond)
+
+    species_ids = load_species_ids()
+    sets_map = load_sets_map()
+
+    # Only backfill cards missing rarity (i.e. minimal imports)
+    card_ids =
+      from(c in Card, where: is_nil(c.rarity), select: c.id)
+      |> Repo.all()
+
+    total = length(card_ids)
+    Logger.info("#{total} cards need detail backfill")
+
+    if total == 0 do
+      Logger.info("All cards already have full details")
+      {:ok, %{updated: 0, failed: [], total: 0}}
+    else
+      counter = :counters.new(1, [:atomics])
+
+      # Group cards by set for batch processing
+      cards_by_set =
+        from(c in Card,
+          where: is_nil(c.rarity),
+          select: {c.set_id, c.id}
+        )
+        |> Repo.all()
+        |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+
+      Logger.info("Cards spread across #{map_size(cards_by_set)} sets")
+
+      {updated, failed} =
+        cards_by_set
+        |> Enum.to_list()
+        |> Task.async_stream(
+          fn {set_id, set_card_ids} ->
+            # Fetch full set detail (includes all card summaries)
+            # Then fetch individual card details for cards in this set
+            set_data = Map.get(sets_map, set_id, %{})
+
+            Enum.reduce(set_card_ids, {0, []}, fn card_id, {count, fails} ->
+              # Use a task with 15s timeout to skip unresponsive cards quickly
+              task = Task.async(fn -> Tcgdex.get_card(card_id) end)
+
+              case Task.yield(task, 15_000) || Task.shutdown(task) do
+                {:ok, {:ok, card_raw}} ->
+                  {card, types, dex_ids, snapshots} =
+                    Transformer.card_attrs(card_raw, set_data)
+
+                  case upsert_card(card, types, dex_ids, snapshots, species_ids) do
+                    {:ok, _} ->
+                      :counters.add(counter, 1, 1)
+                      done = :counters.get(counter, 1)
+
+                      if rem(done, 500) == 0 do
+                        Logger.info("  Backfilled: #{done}/#{total}")
+                      end
+
+                      {count + 1, fails}
+
+                    {:error, reason} ->
+                      Logger.warning("Failed to upsert card #{card_id}: #{inspect(reason)}")
+                      {count, [card_id | fails]}
+                  end
+
+                {:ok, {:error, _reason}} ->
+                  {count, [card_id | fails]}
+
+                nil ->
+                  # Timed out — skip this card
+                  {count, [card_id | fails]}
+              end
+            end)
+          end,
+          max_concurrency: 5,
+          timeout: :infinity,
+          ordered: false
+        )
+        |> Enum.reduce({0, []}, fn
+          {:ok, {count, fails}}, {total_count, all_fails} ->
+            {total_count + count, all_fails ++ fails}
+
+          {:exit, reason}, {count, fails} ->
+            Logger.warning("Card detail task crashed: #{inspect(reason)}")
+            {count, fails}
+        end)
+
+      elapsed = System.monotonic_time(:millisecond) - start
+      Logger.info("Backfilled #{updated} cards in #{format_duration(elapsed)}")
+      if failed != [], do: Logger.warning("#{length(failed)} cards failed backfill")
+      {:ok, %{updated: updated, failed: failed, total: total}}
+    end
   end
 
   # --- Private: Data loading ---

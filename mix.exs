@@ -67,6 +67,7 @@ defmodule Pokevestment.MixProject do
 
       # Background Jobs
       {:oban, "~> 2.17"},
+      {:oban_web, "~> 2.11"},
 
       # ML
       {:explorer, "~> 0.11"},
