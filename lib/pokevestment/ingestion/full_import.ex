@@ -439,8 +439,7 @@ defmodule Pokevestment.Ingestion.FullImport do
             end)
           end,
           max_concurrency: 5,
-          timeout: 600_000,
-          on_timeout: :kill_task,
+          timeout: :infinity,
           ordered: false
         )
         |> Enum.reduce({0, []}, fn

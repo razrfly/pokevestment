@@ -9,10 +9,6 @@ defmodule PokevestmentWeb.SetLive.Index do
   alias Pokevestment.Cards.Set
   alias Pokevestment.Predictions
 
-  # Series/set IDs hidden by default (TCG Pocket, promos, trainer kits, misc)
-  @hidden_series_ids ~w(tcgp tk mc misc pop)
-  @hidden_set_ids ~w(sp ex5.5 fut2020 ru1 wp)
-
   @sort_options %{
     "date_desc" => [desc: :release_date],
     "date_asc" => [asc: :release_date],
@@ -305,9 +301,10 @@ defmodule PokevestmentWeb.SetLive.Index do
 
   defp filter_promos(query, _) do
     from(s in query,
-      where: s.series_id not in @hidden_series_ids,
-      where: s.id not in @hidden_set_ids,
-      where: not ilike(s.name, "%Promo%")
+      where: s.era != "promo" or is_nil(s.era),
+      where: not ilike(s.name, "%Promo%"),
+      where: s.card_count_total >= 18 or is_nil(s.card_count_total),
+      where: s.card_count_total >= 50 or not is_nil(s.logo_url) or is_nil(s.card_count_total)
     )
   end
 
