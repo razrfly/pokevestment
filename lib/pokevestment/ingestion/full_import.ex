@@ -382,50 +382,61 @@ defmodule Pokevestment.Ingestion.FullImport do
     else
       counter = :counters.new(1, [:atomics])
 
+      # Group cards by set for batch processing
+      cards_by_set =
+        from(c in Card,
+          where: is_nil(c.rarity),
+          select: {c.set_id, c.id}
+        )
+        |> Repo.all()
+        |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+
+      Logger.info("Cards spread across #{map_size(cards_by_set)} sets")
+
       {updated, failed} =
-        card_ids
+        cards_by_set
+        |> Enum.to_list()
         |> Task.async_stream(
-          fn card_id ->
-            case Tcgdex.get_card(card_id) do
-              {:ok, card_raw} ->
-                set_id = get_in(card_raw, ["set", "id"])
-                set_data = Map.get(sets_map, set_id, %{})
+          fn {set_id, set_card_ids} ->
+            # Fetch full set detail (includes all card summaries)
+            # Then fetch individual card details for cards in this set
+            set_data = Map.get(sets_map, set_id, %{})
 
-                {card, types, dex_ids, snapshots} =
-                  Transformer.card_attrs(card_raw, set_data)
+            Enum.reduce(set_card_ids, {0, []}, fn card_id, {count, fails} ->
+              case Tcgdex.get_card(card_id) do
+                {:ok, card_raw} ->
+                  {card, types, dex_ids, snapshots} =
+                    Transformer.card_attrs(card_raw, set_data)
 
-                case upsert_card(card, types, dex_ids, snapshots, species_ids) do
-                  {:ok, _} ->
-                    :counters.add(counter, 1, 1)
-                    done = :counters.get(counter, 1)
+                  case upsert_card(card, types, dex_ids, snapshots, species_ids) do
+                    {:ok, _} ->
+                      :counters.add(counter, 1, 1)
+                      done = :counters.get(counter, 1)
 
-                    if rem(done, 500) == 0 do
-                      Logger.info("  Backfilled: #{done}/#{total}")
-                    end
+                      if rem(done, 500) == 0 do
+                        Logger.info("  Backfilled: #{done}/#{total}")
+                      end
 
-                    {:ok, card_id}
+                      {count + 1, fails}
 
-                  {:error, reason} ->
-                    Logger.warning("Failed to upsert card #{card_id}: #{inspect(reason)}")
-                    {:error, card_id}
-                end
+                    {:error, reason} ->
+                      Logger.warning("Failed to upsert card #{card_id}: #{inspect(reason)}")
+                      {count, [card_id | fails]}
+                  end
 
-              {:error, reason} ->
-                Logger.warning("Failed to fetch card #{card_id}: #{inspect(reason)}")
-                {:error, card_id}
-            end
+                {:error, reason} ->
+                  Logger.warning("Failed to fetch card #{card_id}: #{inspect(reason)}")
+                  {count, [card_id | fails]}
+              end
+            end)
           end,
-          max_concurrency: 10,
-          timeout: 30_000,
-          on_timeout: :kill_task,
+          max_concurrency: 5,
+          timeout: :infinity,
           ordered: false
         )
         |> Enum.reduce({0, []}, fn
-          {:ok, {:ok, _id}}, {count, fails} ->
-            {count + 1, fails}
-
-          {:ok, {:error, id}}, {count, fails} ->
-            {count, [id | fails]}
+          {:ok, {count, fails}}, {total_count, all_fails} ->
+            {total_count + count, all_fails ++ fails}
 
           {:exit, reason}, {count, fails} ->
             Logger.warning("Card detail task crashed: #{inspect(reason)}")
