@@ -204,7 +204,7 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
     end
   end
 
-  defp evaluate_signal("STRONG_BUY", actual_return), do: actual_return > 0.0
+  defp evaluate_signal("STRONG_BUY", actual_return), do: actual_return > 0.05
   defp evaluate_signal("BUY", actual_return), do: actual_return > 0.0
   defp evaluate_signal("HOLD", actual_return), do: abs(actual_return) < 0.10
   defp evaluate_signal("OVERVALUED", actual_return), do: actual_return < 0.0
