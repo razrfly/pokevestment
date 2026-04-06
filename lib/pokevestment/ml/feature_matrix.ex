@@ -172,8 +172,9 @@ defmodule Pokevestment.ML.FeatureMatrix do
               c.variants IS NULL
               OR (variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
               OR (variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+              OR (variant = 'holo' AND (c.variants->>'holo')::boolean IS NOT FALSE)
               OR (variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
-              OR variant NOT IN ('normal', 'holofoil', 'reverse-holofoil')
+              OR variant NOT IN ('normal', 'holofoil', 'holo', 'reverse-holofoil')
             )
           ORDER BY snapshot_date DESC,
             CASE

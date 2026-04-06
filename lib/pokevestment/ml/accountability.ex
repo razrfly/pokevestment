@@ -119,6 +119,7 @@ defmodule Pokevestment.ML.Accountability do
 
     from(j in "oban_jobs",
       where: j.worker in ^workers,
+      where: j.state == "completed",
       distinct: j.worker,
       order_by: [asc: j.worker, desc: j.completed_at],
       select: %{
@@ -135,12 +136,13 @@ defmodule Pokevestment.ML.Accountability do
 
   Returns `%{mature_snapshots: n, evaluated: n, pending_evaluation: n, earliest_maturity: date | nil}`.
   """
-  def outcome_readiness do
+  def outcome_readiness(model_version \\ "v1.0.0") do
     today = Date.utc_today()
     cutoff = Date.add(today, -30)
 
     mature_count =
       from(ps in PredictionSnapshot,
+        where: ps.model_version == ^model_version,
         where: ps.prediction_date <= ^cutoff,
         where: ps.signal != "INSUFFICIENT_DATA",
         where: not is_nil(ps.current_price) and ps.current_price > 0,
@@ -148,12 +150,22 @@ defmodule Pokevestment.ML.Accountability do
       )
       |> Repo.one()
 
+    # Count outcomes that match the same eligible snapshot population
     evaluated_count =
-      from(po in PredictionOutcome, select: count(po.id))
+      from(po in PredictionOutcome,
+        join: ps in PredictionSnapshot,
+        on: po.prediction_snapshot_id == ps.id,
+        where: ps.model_version == ^model_version,
+        where: ps.prediction_date <= ^cutoff,
+        where: ps.signal != "INSUFFICIENT_DATA",
+        where: not is_nil(ps.current_price) and ps.current_price > 0,
+        select: count(po.id)
+      )
       |> Repo.one()
 
     earliest =
       from(ps in PredictionSnapshot,
+        where: ps.model_version == ^model_version,
         where: ps.signal != "INSUFFICIENT_DATA",
         where: not is_nil(ps.current_price) and ps.current_price > 0,
         select: min(ps.prediction_date)

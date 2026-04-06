@@ -123,7 +123,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       id: card_id,
       name: truncate(card_raw["name"], 150),
       local_id: truncate(card_raw["localId"], 20),
-      category: card_raw["category"] |> safe_string("Pokemon") |> truncate(20),
+      category: card_raw["category"] |> safe_string("Unknown") |> truncate(20),
       rarity: truncate(card_raw["rarity"], 50),
       hp: card_raw["hp"],
       stage: truncate(card_raw["stage"], 20),
@@ -193,7 +193,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       id: card_id,
       name: truncate(card_entry["name"], 150),
       local_id: truncate(card_entry["localId"], 20),
-      category: card_entry["category"] |> safe_string("Pokemon") |> truncate(20),
+      category: card_entry["category"] |> safe_string("Unknown") |> truncate(20),
       set_id: set_id,
       image_url: build_image_url(image_base)
     }

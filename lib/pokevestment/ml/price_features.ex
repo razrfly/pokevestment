@@ -50,8 +50,9 @@ defmodule Pokevestment.ML.PriceFeatures do
         c.variants IS NULL
         OR (ps.variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
         OR (ps.variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+        OR (ps.variant = 'holo' AND (c.variants->>'holo')::boolean IS NOT FALSE)
         OR (ps.variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
-        OR ps.variant NOT IN ('normal', 'holofoil', 'reverse-holofoil')
+        OR ps.variant NOT IN ('normal', 'holofoil', 'holo', 'reverse-holofoil')
       )
     ORDER BY ps.card_id, ps.snapshot_date DESC,
       CASE
@@ -85,37 +86,30 @@ defmodule Pokevestment.ML.PriceFeatures do
 
   defp compute_derived(base) do
     canonical = base["canonical_price"]
-    source = base["source"]
     avg1 = base["price_avg1"]
     avg7 = base["price_avg7"]
     avg30 = base["price_avg30"]
     high = base["price_high"]
     low = base["price_low"]
-    market = base["price_market"]
-    avg = base["price_avg"]
 
     %{
       "price_momentum_7d" => momentum(avg1, avg7),
       "price_momentum_30d" => momentum(avg1, avg30),
-      "price_volatility" => compute_volatility(source, high, low, market, avg),
+      "price_volatility" => compute_volatility(high, low, canonical),
       "log_price" => safe_log(canonical)
     }
   end
 
-  # TCGPlayer has high/low/market, CardMarket has avg/low (high may be nil)
-  defp compute_volatility("tcgplayer", high, low, market, _avg)
-       when is_number(high) and is_number(low) and is_number(market) and market > 0,
-       do: (high - low) / market
+  # Volatility uses canonical_price (sanitized COALESCE) as denominator
+  defp compute_volatility(high, low, canonical)
+       when is_number(high) and is_number(low) and is_number(canonical) and canonical > 0,
+       do: (high - low) / canonical
 
-  defp compute_volatility(_source, high, low, _market, avg)
-       when is_number(high) and is_number(low) and is_number(avg) and avg > 0,
-       do: (high - low) / avg
+  defp compute_volatility(_high, low, canonical)
+       when is_number(low) and is_number(canonical) and canonical > 0,
+       do: (canonical - low) / canonical
 
-  defp compute_volatility(_source, _high, low, _market, avg)
-       when is_number(low) and is_number(avg) and avg > 0,
-       do: (avg - low) / avg
-
-  defp compute_volatility(_, _, _, _, _), do: nil
+  defp compute_volatility(_, _, _), do: nil
 
   defp momentum(_current, nil), do: nil
   defp momentum(nil, _old), do: nil
