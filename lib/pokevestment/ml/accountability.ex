@@ -75,13 +75,6 @@ defmodule Pokevestment.ML.Accountability do
       where: po.model_version == ^model_version,
       where: not is_nil(po.signal_correct),
       select: %{
-        period_end:
-          fragment(
-            "DATE_TRUNC('day', ? + INTERVAL '1 day' * (? - 1)) + INTERVAL '1 day' * (? - 1)",
-            po.outcome_date,
-            ^window_days,
-            ^window_days
-          ),
         outcome_date: po.outcome_date,
         signal_correct: po.signal_correct
       }
@@ -105,7 +98,7 @@ defmodule Pokevestment.ML.Accountability do
   end
 
   @doc """
-  Pipeline health status — last completed job per worker class.
+  Pipeline health status — most recent job attempt per worker class.
 
   Returns list of `%{worker: string, completed_at: datetime, state: string}`.
   """
