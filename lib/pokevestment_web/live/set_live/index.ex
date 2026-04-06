@@ -305,11 +305,17 @@ defmodule PokevestmentWeb.SetLive.Index do
   defp filter_promos(query, "true"), do: query
 
   defp filter_promos(query, _) do
+    # Excludes promo sets by era or name, then applies card-count thresholds:
+    # - Sets with a logo: >= @min_cards (18)
+    # - Sets without a logo: >= @featured_min_cards (50) to hide placeholder/unfeatured sets
+    # - Sets with nil card_count_total are always included (data not yet ingested)
     from(s in query,
       where: s.era != "promo" or is_nil(s.era),
       where: not ilike(s.name, "%Promo%"),
-      where: s.card_count_total >= ^@min_cards or is_nil(s.card_count_total),
-      where: s.card_count_total >= ^@featured_min_cards or not is_nil(s.logo_url) or is_nil(s.card_count_total)
+      where:
+        is_nil(s.card_count_total) or
+          (not is_nil(s.logo_url) and s.card_count_total >= ^@min_cards) or
+          (is_nil(s.logo_url) and s.card_count_total >= ^@featured_min_cards)
     )
   end
 

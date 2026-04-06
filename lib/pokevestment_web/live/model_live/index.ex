@@ -8,10 +8,12 @@ defmodule PokevestmentWeb.ModelLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    evaluation = Accountability.latest_evaluation()
-    signal_acc = Accountability.signal_accuracy()
-    calibration = Accountability.signal_calibration()
-    readiness = Accountability.outcome_readiness()
+    version = Application.get_env(:pokevestment, :model_version, "v1.0.0")
+
+    evaluation = Accountability.latest_evaluation(version)
+    signal_acc = Accountability.signal_accuracy(version)
+    calibration = Accountability.signal_calibration(version)
+    readiness = Accountability.outcome_readiness(version)
     pipeline = Accountability.pipeline_status()
     price_range = Accountability.price_history_range()
 

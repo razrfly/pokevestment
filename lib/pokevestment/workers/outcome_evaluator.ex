@@ -122,14 +122,16 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
       # Find the date range we need
       outcome_dates = Enum.map(card_outcome_pairs, &elem(&1, 1))
       earliest = Enum.min(outcome_dates, Date)
+      latest = Enum.max(outcome_dates, Date)
       lookback_start = Date.add(earliest, -@lookback_days)
 
       # Query all relevant price snapshots in one go
-      # Use same variant priority as price_features.ex
+      # Variant priority matches price_features.ex exactly
       rows =
         from(ps in PriceSnapshot,
           where: ps.card_id in ^card_ids,
           where: ps.snapshot_date >= ^lookback_start,
+          where: ps.snapshot_date <= ^latest,
           where: not is_nil(coalesce(ps.price_market, ps.price_avg)),
           where: coalesce(ps.price_market, ps.price_avg) > 0,
           select: %{
@@ -145,7 +147,22 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
             desc: ps.snapshot_date,
             asc:
               fragment(
-                "CASE WHEN ? = 'tcgplayer' AND ? = 'normal' THEN 1 WHEN ? = 'tcgplayer' AND ? = 'holofoil' THEN 2 WHEN ? = 'tcgplayer' AND ? = 'reverse-holofoil' THEN 3 WHEN ? = 'cardmarket' AND ? = 'normal' THEN 4 WHEN ? = 'cardmarket' AND ? = 'holo' THEN 5 ELSE 6 END",
+                """
+                CASE
+                  WHEN ? = 'tcgplayer' AND ? = 'normal' THEN 1
+                  WHEN ? = 'tcgplayer' AND ? = 'holofoil' THEN 2
+                  WHEN ? = 'tcgplayer' AND ? = 'reverse-holofoil' THEN 3
+                  WHEN ? = 'tcgplayer' AND ? LIKE '1st-edition%' THEN 4
+                  WHEN ? = 'tcgplayer' AND ? LIKE 'unlimited%' THEN 5
+                  WHEN ? = 'cardmarket' AND ? = 'normal' THEN 6
+                  WHEN ? = 'cardmarket' AND ? = 'holo' THEN 7
+                  ELSE 8
+                END
+                """,
+                ps.source,
+                ps.variant,
+                ps.source,
+                ps.variant,
                 ps.source,
                 ps.variant,
                 ps.source,

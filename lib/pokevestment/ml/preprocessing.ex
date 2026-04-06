@@ -33,9 +33,15 @@ defmodule Pokevestment.ML.Preprocessing do
     # Filter rows without price data
     df = DF.filter_with(df, fn ldf -> Series.is_not_nil(ldf[@target_column]) end)
 
+    # Validate temporal split preconditions
+    if split_strategy == :temporal and "days_since_release" not in DF.names(df) do
+      raise ArgumentError,
+            "temporal split requires 'days_since_release' column but it is missing from the DataFrame"
+    end
+
     # Capture days_since_release before encoding/dropping (needed for temporal split)
     days_series =
-      if split_strategy == :temporal and "days_since_release" in DF.names(df),
+      if split_strategy == :temporal,
         do: DF.pull(df, "days_since_release"),
         else: nil
 
@@ -208,7 +214,8 @@ defmodule Pokevestment.ML.Preprocessing do
 
   # --- Private Helpers ---
 
-  defp temporal_split(features, target, val_fraction, days_series) do
+  defp temporal_split(features, target, val_fraction, days_series)
+       when val_fraction > 0 and val_fraction < 1 do
     n = DF.n_rows(features)
 
     if n < 2 do
@@ -218,18 +225,13 @@ defmodule Pokevestment.ML.Preprocessing do
     # Sort by days_since_release descending (oldest cards first → newest in validation).
     # Nil values get sorted to training set by using a very high value (oldest).
     sort_values =
-      if days_series do
-        days_series
-        |> Series.to_list()
-        |> Enum.with_index()
-        |> Enum.sort_by(fn {val, _idx} ->
-          # Descending by days_since_release: highest (oldest) first in training
-          -(val || 999_999)
-        end)
-      else
-        # Fallback: keep original order
-        0..(n - 1) |> Enum.map(&{0, &1})
-      end
+      days_series
+      |> Series.to_list()
+      |> Enum.with_index()
+      |> Enum.sort_by(fn {val, _idx} ->
+        # Descending by days_since_release: highest (oldest) first in training
+        -(val || 999_999)
+      end)
 
     sorted_indices = Enum.map(sort_values, fn {_val, idx} -> idx end)
 
@@ -248,6 +250,11 @@ defmodule Pokevestment.ML.Preprocessing do
     val_target = Series.slice(target, val_idx_series)
 
     {train_features, train_target, val_features, val_target}
+  end
+
+  defp temporal_split(_features, _target, val_fraction, _days_series) do
+    raise ArgumentError,
+          "temporal_split requires val_fraction to be > 0 and < 1, got #{inspect(val_fraction)}"
   end
 
   defp random_split(features, target, val_fraction) when val_fraction > 0 and val_fraction < 1 do

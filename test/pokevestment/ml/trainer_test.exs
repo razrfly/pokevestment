@@ -323,6 +323,54 @@ defmodule Pokevestment.ML.TrainerTest do
     end
   end
 
+  describe "Preprocessing.prepare_for_training/2 temporal split" do
+    test "temporal split puts oldest cards in training and newest in validation" do
+      {:ok, df} = FeatureMatrix.assemble()
+      {:ok, train_f, _train_t, val_f, _val_t, meta} =
+        Preprocessing.prepare_for_training(df, split_strategy: :temporal)
+
+      assert meta.split_strategy == "temporal"
+      assert meta.train_rows > 0
+      assert meta.val_rows > 0
+
+      # Validation rows should have lower days_since_release (newer cards)
+      # than training rows on average, if the column survived encoding
+      if "days_since_release" in Explorer.DataFrame.names(train_f) do
+        train_days = train_f |> Explorer.DataFrame.pull("days_since_release") |> Explorer.Series.to_list()
+        val_days = val_f |> Explorer.DataFrame.pull("days_since_release") |> Explorer.Series.to_list()
+
+        train_avg = Enum.sum(Enum.reject(train_days, &is_nil/1)) / max(length(Enum.reject(train_days, &is_nil/1)), 1)
+        val_avg = Enum.sum(Enum.reject(val_days, &is_nil/1)) / max(length(Enum.reject(val_days, &is_nil/1)), 1)
+
+        # Training set should have older cards (higher days_since_release)
+        assert train_avg >= val_avg
+      end
+    end
+
+    test "temporal split raises when days_since_release is missing" do
+      require Explorer.DataFrame, as: DF
+
+      # Build a minimal DataFrame without days_since_release
+      df = DF.new(%{log_price: [1.0, 2.0, 3.0], some_feature: [1, 2, 3]})
+
+      assert_raise ArgumentError, ~r/days_since_release/, fn ->
+        Preprocessing.prepare_for_training(df, split_strategy: :temporal)
+      end
+    end
+
+    test "temporal split raises on invalid val_fraction" do
+      {:ok, df} = FeatureMatrix.assemble()
+
+      assert_raise ArgumentError, ~r/val_fraction/, fn ->
+        Preprocessing.prepare_for_training(df, split_strategy: :temporal, val_fraction: 0.0)
+      end
+
+      assert_raise ArgumentError, ~r/val_fraction/, fn ->
+        Preprocessing.prepare_for_training(df, split_strategy: :temporal, val_fraction: 1.0)
+      end
+    end
+  end
+
   describe "Pipeline.run/1" do
     test "runs full pipeline and persists predictions" do
       version = "v1.0.0-test-#{System.unique_integer([:positive])}"
