@@ -119,9 +119,8 @@ defmodule Pokevestment.ML.Accountability do
 
     from(j in "oban_jobs",
       where: j.worker in ^workers,
-      where: j.state == "completed",
       distinct: j.worker,
-      order_by: [asc: j.worker, desc: j.completed_at],
+      order_by: [asc: j.worker, desc: j.attempted_at],
       select: %{
         worker: j.worker,
         completed_at: j.completed_at,
