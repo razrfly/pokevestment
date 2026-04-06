@@ -155,11 +155,26 @@ defmodule Pokevestment.ML.FeatureMatrix do
           AVG(ps.best_price::float) AS avg_price
         FROM cards c
         LEFT JOIN LATERAL (
-          SELECT COALESCE(price_market, price_avg) AS best_price
+          SELECT COALESCE(
+            CASE
+              WHEN price_market IS NOT NULL
+                AND (price_low IS NULL OR price_market >= price_low * 0.5)
+              THEN price_market
+            END,
+            price_mid,
+            price_avg
+          ) AS best_price
           FROM price_snapshots
           WHERE card_id = c.id
-            AND COALESCE(price_market, price_avg) IS NOT NULL
-            AND COALESCE(price_market, price_avg) > 0
+            AND COALESCE(price_market, price_mid, price_avg) IS NOT NULL
+            AND COALESCE(price_market, price_mid, price_avg) > 0
+            AND (
+              c.variants IS NULL
+              OR (variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
+              OR (variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+              OR (variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
+              OR variant NOT IN ('normal', 'holofoil', 'reverse-holofoil')
+            )
           ORDER BY snapshot_date DESC,
             CASE
               WHEN source = 'tcgplayer' AND variant = 'normal' THEN 1
@@ -167,6 +182,9 @@ defmodule Pokevestment.ML.FeatureMatrix do
               WHEN source = 'tcgplayer' AND variant = 'reverse-holofoil' THEN 3
               WHEN source = 'tcgplayer' AND variant = '1st-edition-holofoil' THEN 4
               WHEN source = 'tcgplayer' AND variant = '1st-edition-normal' THEN 5
+              WHEN source = 'tcgplayer' AND variant = 'unlimited' THEN 5
+              WHEN source = 'tcgplayer' AND variant = 'unlimited-holofoil' THEN 5
+              WHEN source = 'tcgplayer' AND variant = '1st-edition' THEN 5
               WHEN source = 'cardmarket' AND variant = 'normal' THEN 6
               WHEN source = 'cardmarket' AND variant = 'holo' THEN 7
               ELSE 8

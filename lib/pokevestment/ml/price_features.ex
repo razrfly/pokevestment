@@ -24,7 +24,15 @@ defmodule Pokevestment.ML.PriceFeatures do
       ps.card_id,
       ps.source,
       ps.currency,
-      COALESCE(ps.price_market, ps.price_avg)::float AS canonical_price,
+      COALESCE(
+        CASE
+          WHEN ps.price_market IS NOT NULL
+            AND (ps.price_low IS NULL OR ps.price_market >= ps.price_low * 0.5)
+          THEN ps.price_market
+        END,
+        ps.price_mid,
+        ps.price_avg
+      )::float AS canonical_price,
       ps.price_low::float,
       ps.price_high::float,
       ps.price_mid::float,
@@ -35,8 +43,16 @@ defmodule Pokevestment.ML.PriceFeatures do
       ps.price_avg7::float,
       ps.price_avg30::float
     FROM price_snapshots ps
-    WHERE COALESCE(ps.price_market, ps.price_avg) IS NOT NULL
-      AND COALESCE(ps.price_market, ps.price_avg) > 0
+    JOIN cards c ON c.id = ps.card_id
+    WHERE COALESCE(ps.price_market, ps.price_mid, ps.price_avg) IS NOT NULL
+      AND COALESCE(ps.price_market, ps.price_mid, ps.price_avg) > 0
+      AND (
+        c.variants IS NULL
+        OR (ps.variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
+        OR (ps.variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+        OR (ps.variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
+        OR ps.variant NOT IN ('normal', 'holofoil', 'reverse-holofoil')
+      )
     ORDER BY ps.card_id, ps.snapshot_date DESC,
       CASE
         WHEN ps.source = 'tcgplayer' AND ps.variant = 'normal' THEN 1
@@ -44,6 +60,9 @@ defmodule Pokevestment.ML.PriceFeatures do
         WHEN ps.source = 'tcgplayer' AND ps.variant = 'reverse-holofoil' THEN 3
         WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition-holofoil' THEN 4
         WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition-normal' THEN 5
+        WHEN ps.source = 'tcgplayer' AND ps.variant = 'unlimited' THEN 5
+        WHEN ps.source = 'tcgplayer' AND ps.variant = 'unlimited-holofoil' THEN 5
+        WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition' THEN 5
         WHEN ps.source = 'cardmarket' AND ps.variant = 'normal' THEN 6
         WHEN ps.source = 'cardmarket' AND ps.variant = 'holo' THEN 7
         ELSE 8
