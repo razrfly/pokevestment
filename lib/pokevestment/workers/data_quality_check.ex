@@ -15,7 +15,17 @@ defmodule Pokevestment.Workers.DataQualityCheck do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    results = DataQuality.run_all_checks()
+    results =
+      try do
+        DataQuality.run_all_checks()
+      rescue
+        e ->
+          Logger.error(
+            "[DataQualityCheck] DataQuality.run_all_checks failed: #{Exception.message(e)}\n#{Exception.format_stacktrace(__STACKTRACE__)}"
+          )
+
+          %{}
+      end
 
     warnings =
       results
