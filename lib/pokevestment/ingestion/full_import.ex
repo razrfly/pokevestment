@@ -222,7 +222,7 @@ defmodule Pokevestment.Ingestion.FullImport do
 
     counter = :counters.new(1, [:atomics])
 
-    {imported, failed} =
+    {imported, all_failed_acc} =
       set_ids
       |> Task.async_stream(
         fn set_id ->
@@ -263,12 +263,14 @@ defmodule Pokevestment.Ingestion.FullImport do
       )
       |> Enum.reduce({0, []}, fn
         {:ok, {:ok, {count, fails}}}, {total, all_failed} ->
-          {total + count, all_failed ++ fails}
+          {total + count, [fails | all_failed]}
 
         {:exit, reason}, {total, all_failed} ->
           Logger.warning("Set card task crashed: #{inspect(reason)}")
           {total, all_failed}
       end)
+
+    failed = all_failed_acc |> Enum.reverse() |> List.flatten()
 
     elapsed = System.monotonic_time(:millisecond) - start
     Logger.info("Imported #{imported} cards in #{format_duration(elapsed)}")
@@ -393,7 +395,7 @@ defmodule Pokevestment.Ingestion.FullImport do
 
       Logger.info("Cards spread across #{map_size(cards_by_set)} sets")
 
-      {updated, failed} =
+      {updated, all_fails_acc} =
         cards_by_set
         |> Enum.to_list()
         |> Task.async_stream(
@@ -437,17 +439,20 @@ defmodule Pokevestment.Ingestion.FullImport do
             end)
           end,
           max_concurrency: 5,
-          timeout: :infinity,
+          timeout: 600_000,
+          on_timeout: :kill_task,
           ordered: false
         )
         |> Enum.reduce({0, []}, fn
           {:ok, {count, fails}}, {total_count, all_fails} ->
-            {total_count + count, all_fails ++ fails}
+            {total_count + count, [fails | all_fails]}
 
           {:exit, reason}, {count, fails} ->
             Logger.warning("Card detail task crashed: #{inspect(reason)}")
             {count, fails}
         end)
+
+      failed = all_fails_acc |> Enum.reverse() |> List.flatten()
 
       elapsed = System.monotonic_time(:millisecond) - start
       Logger.info("Backfilled #{updated} cards in #{format_duration(elapsed)}")

@@ -46,8 +46,17 @@ defmodule PokevestmentWeb.Router do
     if Application.get_env(:pokevestment, :admin_auth_disabled, false) do
       conn
     else
-      username = System.get_env("ADMIN_USERNAME") || "admin"
-      password = System.get_env("ADMIN_PASSWORD") || raise "ADMIN_PASSWORD must be set"
+      username =
+        case System.get_env("ADMIN_USERNAME") do
+          nil -> "admin"
+          val -> if String.trim(val) == "", do: "admin", else: String.trim(val)
+        end
+
+      password =
+        case System.get_env("ADMIN_PASSWORD") do
+          nil -> raise "ADMIN_PASSWORD must be set"
+          val -> if String.trim(val) == "", do: raise("ADMIN_PASSWORD must not be blank"), else: String.trim(val)
+        end
 
       Plug.BasicAuth.basic_auth(conn, username: username, password: password)
     end
