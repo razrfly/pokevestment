@@ -49,13 +49,17 @@ defmodule PokevestmentWeb.Router do
       username =
         case System.get_env("ADMIN_USERNAME") do
           nil -> "admin"
-          val -> if String.trim(val) == "", do: "admin", else: String.trim(val)
+          val ->
+            trimmed = String.trim(val)
+            if trimmed == "", do: "admin", else: trimmed
         end
 
       password =
         case System.get_env("ADMIN_PASSWORD") do
           nil -> raise "ADMIN_PASSWORD must be set"
-          val -> if String.trim(val) == "", do: raise("ADMIN_PASSWORD must not be blank"), else: String.trim(val)
+          val ->
+            trimmed = String.trim(val)
+            if trimmed == "", do: raise("ADMIN_PASSWORD must not be blank"), else: trimmed
         end
 
       Plug.BasicAuth.basic_auth(conn, username: username, password: password)

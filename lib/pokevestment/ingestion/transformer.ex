@@ -193,7 +193,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       id: card_id,
       name: truncate(card_entry["name"], 150),
       local_id: truncate(card_entry["localId"], 20),
-      category: truncate(card_entry["category"] || "Pokemon", 20),
+      category: card_entry["category"] |> safe_string("Pokemon") |> truncate(20),
       set_id: set_id,
       image_url: build_image_url(image_base)
     }
@@ -370,6 +370,8 @@ defmodule Pokevestment.Ingestion.Transformer do
 
     holo_values = [
       prices["reverseHoloAvg1"],
+      prices["reverseHoloAvg7"],
+      prices["reverseHoloAvg30"],
       prices["reverseHoloLow"],
       prices["reverseHoloTrend"],
       prices["reverseHoloSell"]
@@ -428,11 +430,12 @@ defmodule Pokevestment.Ingestion.Transformer do
 
   defp truncate(nil, _max), do: nil
 
-  defp truncate(str, max) when is_binary(str) and byte_size(str) > max do
-    String.slice(str, 0, max)
+  defp truncate(str, max) when is_binary(str) do
+    if String.length(str) > max, do: String.slice(str, 0, max), else: str
   end
 
-  defp truncate(str, _max) when is_binary(str), do: str
+  defp safe_string(val, _fallback) when is_binary(val), do: val
+  defp safe_string(_val, fallback), do: fallback
 
   defp parse_date(nil), do: nil
 
