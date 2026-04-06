@@ -38,7 +38,24 @@ defmodule Pokevestment.Pricing.PriceSnapshot do
     |> validate_length(:source, max: 20)
     |> validate_length(:variant, max: 30)
     |> validate_length(:currency, max: 3)
+    |> validate_has_positive_price()
     |> unique_constraint([:card_id, :source, :variant, :snapshot_date])
     |> foreign_key_constraint(:card_id)
+  end
+
+  @price_fields ~w(price_low price_mid price_high price_market price_avg price_trend)a
+
+  defp validate_has_positive_price(changeset) do
+    has_positive =
+      Enum.any?(@price_fields, fn field ->
+        val = get_field(changeset, field)
+        val != nil and Decimal.gt?(val, Decimal.new(0))
+      end)
+
+    if has_positive do
+      changeset
+    else
+      add_error(changeset, :price_low, "at least one price field must be positive")
+    end
   end
 end

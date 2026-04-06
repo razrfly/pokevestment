@@ -123,7 +123,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       id: card_id,
       name: truncate(card_raw["name"], 150),
       local_id: truncate(card_raw["localId"], 20),
-      category: truncate(card_raw["category"], 20),
+      category: card_raw["category"] |> safe_string("Pokemon") |> truncate(20),
       rarity: truncate(card_raw["rarity"], 50),
       hp: card_raw["hp"],
       stage: truncate(card_raw["stage"], 20),
@@ -227,7 +227,7 @@ defmodule Pokevestment.Ingestion.Transformer do
           %{
             card_id: card_id,
             source: "tcgplayer",
-            variant: variant,
+            variant: normalize_variant(variant),
             snapshot_date: today,
             currency: currency,
             price_low: to_decimal(data["lowPrice"]),
@@ -277,7 +277,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       cardmarket["avg30-holo"]
     ]
 
-    if Enum.any?(holo_values, &(not is_nil(&1))) do
+    if Enum.any?(holo_values, fn val -> is_number(val) and val > 0 end) do
       holo = %{
         card_id: card_id,
         source: "cardmarket",
@@ -330,7 +330,7 @@ defmodule Pokevestment.Ingestion.Transformer do
           %{
             card_id: card_id,
             source: "tcgplayer",
-            variant: normalize_ptcg_tcgplayer_variant(variant),
+            variant: normalize_variant(variant),
             snapshot_date: today,
             currency: "USD",
             price_low: to_decimal(data["low"]),
@@ -377,7 +377,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       prices["reverseHoloSell"]
     ]
 
-    if Enum.any?(holo_values, &(not is_nil(&1))) do
+    if Enum.any?(holo_values, fn val -> is_number(val) and val > 0 end) do
       holo = %{
         card_id: card_id,
         source: "cardmarket",
@@ -406,8 +406,29 @@ defmodule Pokevestment.Ingestion.Transformer do
 
   def parse_datetime(str) when is_binary(str) do
     case DateTime.from_iso8601(str) do
-      {:ok, dt, _offset} -> DateTime.truncate(dt, :second)
-      _ -> nil
+      {:ok, dt, _offset} ->
+        DateTime.truncate(dt, :second)
+
+      _ ->
+        # Fallback: try parsing "YYYY/MM/DD" format from Pokemon TCG API
+        parse_slash_date(str)
+    end
+  end
+
+  defp parse_slash_date(str) do
+    case String.split(str, "/") do
+      [y, m, d] ->
+        with {year, ""} <- Integer.parse(y),
+             {month, ""} <- Integer.parse(m),
+             {day, ""} <- Integer.parse(d),
+             {:ok, date} <- Date.new(year, month, day) do
+          DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+        else
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
   end
 
@@ -489,10 +510,13 @@ defmodule Pokevestment.Ingestion.Transformer do
 
   defp extract_evolves_from_id(_), do: nil
 
-  defp normalize_ptcg_tcgplayer_variant("reverseHolofoil"), do: "reverse-holofoil"
-  defp normalize_ptcg_tcgplayer_variant("1stEditionHolofoil"), do: "1st-edition-holofoil"
-  defp normalize_ptcg_tcgplayer_variant("1stEditionNormal"), do: "1st-edition-normal"
-  defp normalize_ptcg_tcgplayer_variant(variant), do: variant
+  @doc "Normalize variant names to kebab-case. Used by both TCGdex and Pokemon TCG API paths."
+  def normalize_variant("reverseHolofoil"), do: "reverse-holofoil"
+  def normalize_variant("1stEdition"), do: "1st-edition"
+  def normalize_variant("1stEditionHolofoil"), do: "1st-edition-holofoil"
+  def normalize_variant("1stEditionNormal"), do: "1st-edition-normal"
+  def normalize_variant("unlimitedHolofoil"), do: "unlimited-holofoil"
+  def normalize_variant(other), do: other
 
   defp build_image_url(nil), do: nil
   defp build_image_url(base_url), do: base_url <> "/high.webp"

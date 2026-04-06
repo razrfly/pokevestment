@@ -19,7 +19,7 @@ defmodule Pokevestment.Workers.DailyPrediction do
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     with {:ok, version} <- resolve_version(args) do
-      case Pipeline.run(version: version) do
+      case Pipeline.run(version: version, split_strategy: :temporal) do
         {:ok, _summary} -> :ok
         {:error, reason} -> {:error, reason}
       end

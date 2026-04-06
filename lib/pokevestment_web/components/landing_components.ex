@@ -201,6 +201,9 @@ defmodule PokevestmentWeb.LandingComponents do
             <.link href="#stats" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
               Data
             </.link>
+            <.link href="/models" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
+              Models
+            </.link>
             <.link href="#cta" class="text-sm text-olive-700 hover:text-olive-950 dark:text-olive-400 dark:hover:text-white">
               About
             </.link>

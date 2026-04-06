@@ -45,7 +45,9 @@ config :pokevestment, Oban,
        # Daily tournament sync at 8 AM UTC
        {"0 8 * * *", Pokevestment.Workers.TournamentSync, queue: :ingestion},
        # Daily ML prediction pipeline at 9 AM UTC (after prices + tournaments)
-       {"0 9 * * *", Pokevestment.Workers.DailyPrediction}
+       {"0 9 * * *", Pokevestment.Workers.DailyPrediction},
+       # Daily outcome evaluation at 10 AM UTC (after predictions)
+       {"0 10 * * *", Pokevestment.Workers.OutcomeEvaluator}
      ]}
   ]
 

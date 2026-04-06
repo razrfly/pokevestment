@@ -27,9 +27,11 @@ defmodule Pokevestment.ML.Pipeline do
     Logger.info("[ML Pipeline] Starting pipeline #{version}")
     pipeline_start = System.monotonic_time(:millisecond)
 
+    split_strategy = Keyword.get(opts, :split_strategy, :random)
+
     with {:ok, df} <- step_assemble(),
          {:ok, train_f, train_t, val_f, val_t, prep_meta} <-
-           step_preprocess(df, val_fraction: val_fraction),
+           step_preprocess(df, val_fraction: val_fraction, split_strategy: split_strategy),
          {:ok, booster, metrics, train_meta} <-
            step_train(train_f, train_t, val_f, val_t, opts),
          :ok <- step_save_model(booster, version),
@@ -203,7 +205,7 @@ defmodule Pokevestment.ML.Pipeline do
       mape: safe_metric(metrics.mape),
       baseline_rmse: safe_metric(metrics.baseline_rmse),
       baseline_r_squared: safe_metric(metrics.baseline_r_squared),
-      split_strategy: "random",
+      split_strategy: prep_meta[:split_strategy] || "random",
       train_rows: prep_meta.train_rows,
       val_rows: prep_meta.val_rows,
       feature_importances: rounded_feat,

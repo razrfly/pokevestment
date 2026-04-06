@@ -1,0 +1,50 @@
+defmodule Pokevestment.ML.PredictionOutcome do
+  @moduledoc """
+  Records the actual outcome of a prediction after its 30-day maturity window.
+
+  Each row links back to a `PredictionSnapshot` and captures the actual price
+  at the outcome date, the realized return, and whether the signal was correct.
+
+  The `outcome_price_source` and `outcome_price_currency` fields record which
+  price variant was used for evaluation (e.g. "tcgplayer" / "USD"), since the
+  closest available price may come from a different source than the original.
+  """
+
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @timestamps_opts [updated_at: false]
+
+  schema "prediction_outcomes" do
+    field :model_version, :string
+    field :prediction_date, :date
+    field :outcome_date, :date
+    field :predicted_fair_value, :decimal
+    field :price_at_prediction, :decimal
+    field :price_at_outcome, :decimal
+    field :actual_return, :decimal
+    field :signal, :string
+    field :signal_correct, :boolean
+    field :outcome_price_source, :string
+    field :outcome_price_currency, :string
+
+    belongs_to :prediction_snapshot, Pokevestment.ML.PredictionSnapshot
+    belongs_to :card, Pokevestment.Cards.Card, type: :string
+
+    timestamps(type: :utc_datetime)
+  end
+
+  @required_fields ~w(prediction_snapshot_id card_id model_version prediction_date outcome_date signal)a
+  @optional_fields ~w(predicted_fair_value price_at_prediction price_at_outcome actual_return signal_correct outcome_price_source outcome_price_currency)a
+
+  def changeset(outcome, attrs) do
+    outcome
+    |> cast(attrs, @required_fields ++ @optional_fields)
+    |> validate_required(@required_fields)
+    |> validate_length(:model_version, max: 20)
+    |> validate_length(:signal, max: 20)
+    |> unique_constraint(:prediction_snapshot_id)
+    |> foreign_key_constraint(:prediction_snapshot_id)
+    |> foreign_key_constraint(:card_id)
+  end
+end

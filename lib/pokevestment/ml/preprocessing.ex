@@ -28,9 +28,16 @@ defmodule Pokevestment.ML.Preprocessing do
   """
   def prepare_for_training(df, opts \\ []) do
     val_fraction = Keyword.get(opts, :val_fraction, 0.2)
+    split_strategy = Keyword.get(opts, :split_strategy, :random)
 
     # Filter rows without price data
     df = DF.filter_with(df, fn ldf -> Series.is_not_nil(ldf[@target_column]) end)
+
+    # Capture days_since_release before encoding/dropping (needed for temporal split)
+    days_series =
+      if split_strategy == :temporal and "days_since_release" in DF.names(df),
+        do: DF.pull(df, "days_since_release"),
+        else: nil
 
     # Encode categoricals and booleans
     {df, encodings} = encode_categoricals(df, @categorical_columns)
@@ -43,7 +50,13 @@ defmodule Pokevestment.ML.Preprocessing do
 
     # Split
     {train_features, train_target, val_features, val_target} =
-      random_split(features, target, val_fraction)
+      case split_strategy do
+        :temporal ->
+          temporal_split(features, target, val_fraction, days_series)
+
+        :random ->
+          random_split(features, target, val_fraction)
+      end
 
     metadata = %{
       encodings: encodings,
@@ -52,7 +65,8 @@ defmodule Pokevestment.ML.Preprocessing do
       boolean_columns: @boolean_columns,
       total_rows: Series.size(target),
       train_rows: DF.n_rows(train_features),
-      val_rows: DF.n_rows(val_features)
+      val_rows: DF.n_rows(val_features),
+      split_strategy: Atom.to_string(split_strategy)
     }
 
     {:ok, train_features, train_target, val_features, val_target, metadata}
@@ -193,6 +207,48 @@ defmodule Pokevestment.ML.Preprocessing do
   end
 
   # --- Private Helpers ---
+
+  defp temporal_split(features, target, val_fraction, days_series) do
+    n = DF.n_rows(features)
+
+    if n < 2 do
+      raise ArgumentError, "temporal_split requires at least 2 rows, got #{n}"
+    end
+
+    # Sort by days_since_release descending (oldest cards first → newest in validation).
+    # Nil values get sorted to training set by using a very high value (oldest).
+    sort_values =
+      if days_series do
+        days_series
+        |> Series.to_list()
+        |> Enum.with_index()
+        |> Enum.sort_by(fn {val, _idx} ->
+          # Descending by days_since_release: highest (oldest) first in training
+          -(val || 999_999)
+        end)
+      else
+        # Fallback: keep original order
+        0..(n - 1) |> Enum.map(&{0, &1})
+      end
+
+    sorted_indices = Enum.map(sort_values, fn {_val, idx} -> idx end)
+
+    val_size = n |> Kernel.*(val_fraction) |> round() |> max(1) |> min(n - 1)
+    train_size = n - val_size
+
+    train_indices = Enum.take(sorted_indices, train_size)
+    val_indices = Enum.drop(sorted_indices, train_size)
+
+    train_idx_series = Series.from_list(train_indices)
+    val_idx_series = Series.from_list(val_indices)
+
+    train_features = DF.slice(features, train_idx_series)
+    val_features = DF.slice(features, val_idx_series)
+    train_target = Series.slice(target, train_idx_series)
+    val_target = Series.slice(target, val_idx_series)
+
+    {train_features, train_target, val_features, val_target}
+  end
 
   defp random_split(features, target, val_fraction) when val_fraction > 0 and val_fraction < 1 do
     n = DF.n_rows(features)

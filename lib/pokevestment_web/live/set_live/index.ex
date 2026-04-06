@@ -9,6 +9,11 @@ defmodule PokevestmentWeb.SetLive.Index do
   alias Pokevestment.Cards.Set
   alias Pokevestment.Predictions
 
+  # Minimum card count to exclude tiny promo sets
+  @min_cards 18
+  # Minimum card count for sets without a logo (likely placeholder/unfeatured)
+  @featured_min_cards 50
+
   @sort_options %{
     "date_desc" => [desc: :release_date],
     "date_asc" => [asc: :release_date],
@@ -303,8 +308,8 @@ defmodule PokevestmentWeb.SetLive.Index do
     from(s in query,
       where: s.era != "promo" or is_nil(s.era),
       where: not ilike(s.name, "%Promo%"),
-      where: s.card_count_total >= 18 or is_nil(s.card_count_total),
-      where: s.card_count_total >= 50 or not is_nil(s.logo_url) or is_nil(s.card_count_total)
+      where: s.card_count_total >= ^@min_cards or is_nil(s.card_count_total),
+      where: s.card_count_total >= ^@featured_min_cards or not is_nil(s.logo_url) or is_nil(s.card_count_total)
     )
   end
 
