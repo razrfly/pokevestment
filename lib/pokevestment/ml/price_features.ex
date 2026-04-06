@@ -103,11 +103,11 @@ defmodule Pokevestment.ML.PriceFeatures do
   # Volatility uses canonical_price (sanitized COALESCE) as denominator
   defp compute_volatility(high, low, canonical)
        when is_number(high) and is_number(low) and is_number(canonical) and canonical > 0,
-       do: (high - low) / canonical
+       do: max(high - low, 0) / canonical
 
   defp compute_volatility(_high, low, canonical)
        when is_number(low) and is_number(canonical) and canonical > 0,
-       do: (canonical - low) / canonical
+       do: max(canonical - low, 0) / canonical
 
   defp compute_volatility(_, _, _), do: nil
 
