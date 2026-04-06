@@ -322,6 +322,7 @@ defmodule Pokevestment.Ingestion.Transformer do
 
   defp build_ptcg_tcgplayer_snapshots(card_id, tcgplayer, today) do
     source_updated_at = parse_datetime(tcgplayer["updatedAt"])
+    product_id = extract_product_id_from_url(tcgplayer["url"])
     prices = tcgplayer["prices"] || %{}
 
     Enum.flat_map(prices, fn
@@ -338,6 +339,7 @@ defmodule Pokevestment.Ingestion.Transformer do
             price_high: to_decimal(data["high"]),
             price_market: to_decimal(data["market"]),
             price_direct_low: to_decimal(data["directLow"]),
+            product_id: product_id,
             source_updated_at: source_updated_at
           }
         ]
@@ -351,6 +353,7 @@ defmodule Pokevestment.Ingestion.Transformer do
 
   defp build_ptcg_cardmarket_snapshots(card_id, cardmarket, today) do
     source_updated_at = parse_datetime(cardmarket["updatedAt"])
+    product_id = extract_product_id_from_url(cardmarket["url"])
     prices = cardmarket["prices"] || %{}
 
     base = %{
@@ -365,6 +368,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       price_avg1: to_decimal(prices["avg1"]),
       price_avg7: to_decimal(prices["avg7"]),
       price_avg30: to_decimal(prices["avg30"]),
+      product_id: product_id,
       source_updated_at: source_updated_at
     }
 
@@ -390,6 +394,7 @@ defmodule Pokevestment.Ingestion.Transformer do
         price_avg1: to_decimal(prices["reverseHoloAvg1"]),
         price_avg7: to_decimal(prices["reverseHoloAvg7"]),
         price_avg30: to_decimal(prices["reverseHoloAvg30"]),
+        product_id: product_id,
         source_updated_at: source_updated_at
       }
 
@@ -509,6 +514,35 @@ defmodule Pokevestment.Ingestion.Transformer do
   end
 
   defp extract_evolves_from_id(_), do: nil
+
+  @doc """
+  Extract an integer product ID from a TCGPlayer or CardMarket URL.
+
+  ## Examples
+
+      iex> extract_product_id_from_url("https://www.tcgplayer.com/product/12345/foo-bar")
+      12345
+
+      iex> extract_product_id_from_url("https://www.cardmarket.com/en/Pokemon/Products/Singles/Foo/Bar/12345")
+      12345
+
+      iex> extract_product_id_from_url(nil)
+      nil
+  """
+  def extract_product_id_from_url(nil), do: nil
+
+  def extract_product_id_from_url(url) when is_binary(url) do
+    url
+    |> URI.parse()
+    |> Map.get(:path, "")
+    |> String.split("/")
+    |> Enum.find_value(fn segment ->
+      case Integer.parse(segment) do
+        {id, ""} when id > 0 -> id
+        _ -> nil
+      end
+    end)
+  end
 
   @doc "Normalize variant names to kebab-case. Used by both TCGdex and Pokemon TCG API paths."
   def normalize_variant("reverseHolofoil"), do: "reverse-holofoil"
