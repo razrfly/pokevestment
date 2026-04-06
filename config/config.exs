@@ -42,6 +42,8 @@ config :pokevestment, Oban,
      crontab: [
        # Daily price sync at 6 AM UTC
        {"0 6 * * *", Pokevestment.Workers.DailyPriceSync, queue: :ingestion},
+       # Daily data quality check at 7 AM UTC (after prices, before tournaments)
+       {"0 7 * * *", Pokevestment.Workers.DataQualityCheck},
        # Daily tournament sync at 8 AM UTC
        {"0 8 * * *", Pokevestment.Workers.TournamentSync, queue: :ingestion},
        # Daily ML prediction pipeline at 9 AM UTC (after prices + tournaments)
