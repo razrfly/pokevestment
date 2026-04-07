@@ -24,7 +24,7 @@ defmodule Pokevestment.Workers.DataQualityCheck do
             "[DataQualityCheck] DataQuality.run_all_checks failed: #{Exception.message(e)}\n#{Exception.format_stacktrace(__STACKTRACE__)}"
           )
 
-          %{}
+          reraise e, __STACKTRACE__
       end
 
     warnings =
