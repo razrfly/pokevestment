@@ -534,7 +534,8 @@ defmodule Pokevestment.Ingestion.Transformer do
   def extract_product_id_from_url(url) when is_binary(url) do
     url
     |> URI.parse()
-    |> Map.get(:path, "")
+    |> Map.get(:path)
+    |> Kernel.||("")
     |> String.split("/")
     |> Enum.find_value(fn segment ->
       case Integer.parse(segment) do

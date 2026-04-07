@@ -49,6 +49,7 @@ defmodule Pokevestment.Ingestion.DataQuality do
   def check_variant_consistency do
     variants =
       from(ps in PriceSnapshot,
+        where: not is_nil(ps.variant),
         distinct: ps.variant,
         select: ps.variant
       )
@@ -84,7 +85,7 @@ defmodule Pokevestment.Ingestion.DataQuality do
 
   @doc "Percentage of cards with at least one price snapshot in the last 7 days."
   def check_coverage(today \\ Date.utc_today()) do
-    week_ago = Date.add(today, -7)
+    week_ago = Date.add(today, -6)
 
     total_cards =
       from(c in "cards", select: count(c.id))
