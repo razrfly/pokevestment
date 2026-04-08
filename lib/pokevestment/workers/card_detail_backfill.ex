@@ -28,9 +28,12 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
 
   # Process up to this many cards per run to avoid long-running jobs
   @batch_size 500
+  # Cap follow-up chain to prevent infinite rescheduling on permanently failing cards
+  @max_follow_ups 10
 
   @impl Oban.Worker
-  def perform(%Oban.Job{}) do
+  def perform(%Oban.Job{args: args}) do
+    follow_up = Map.get(args, "follow_up", 0)
     cards_needing_backfill = count_incomplete_cards()
 
     if cards_needing_backfill == 0 do
@@ -38,7 +41,7 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
       :ok
     else
       Logger.info(
-        "[CardDetailBackfill] #{cards_needing_backfill} cards need backfill, processing up to #{@batch_size}"
+        "[CardDetailBackfill] #{cards_needing_backfill} cards need backfill, processing up to #{@batch_size} (follow-up #{follow_up}/#{@max_follow_ups})"
       )
 
       # Fetch exchange rate once for the batch
@@ -57,11 +60,26 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
           "#{result.sold_added} sold prices, #{result.listing_added} listing prices"
       )
 
-      # If more cards remain, schedule another run in 5 minutes
+      # Schedule follow-up only if: progress was made, cards remain, and we haven't hit the cap
       remaining = cards_needing_backfill - result.updated
-      if remaining > 0 do
-        Logger.info("[CardDetailBackfill] #{remaining} cards still need backfill, scheduling follow-up")
-        %{} |> __MODULE__.new(schedule_in: 300) |> Oban.insert()
+
+      cond do
+        remaining <= 0 ->
+          :ok
+
+        result.updated == 0 ->
+          Logger.warning(
+            "[CardDetailBackfill] No progress made, #{remaining} cards may be permanently unfetchable — stopping"
+          )
+
+        follow_up >= @max_follow_ups ->
+          Logger.warning(
+            "[CardDetailBackfill] Reached follow-up limit (#{@max_follow_ups}), #{remaining} cards still incomplete — stopping"
+          )
+
+        true ->
+          Logger.info("[CardDetailBackfill] #{remaining} cards still need backfill, scheduling follow-up")
+          %{"follow_up" => follow_up + 1} |> __MODULE__.new(schedule_in: 300) |> Oban.insert()
       end
 
       :ok
