@@ -37,9 +37,9 @@ defmodule Pokevestment.ML.Accountability do
     )
     |> Repo.all()
     |> Map.new(fn {signal, %{total: total, correct: correct}} ->
-      correct = decimal_to_float(correct)
-      accuracy = if total > 0, do: Float.round(correct / total * 100, 1), else: 0.0
-      {signal, %{total: total, correct: correct, accuracy: accuracy}}
+      correct_float = decimal_to_float(correct)
+      accuracy = if total > 0, do: Float.round(correct_float / total * 100, 1), else: 0.0
+      {signal, %{total: total, correct: trunc(correct_float), accuracy: accuracy}}
     end)
   end
 
@@ -128,7 +128,7 @@ defmodule Pokevestment.ML.Accountability do
     from(j in "oban_jobs",
       where: j.worker in ^workers,
       distinct: j.worker,
-      order_by: [asc: j.worker, desc: j.attempted_at],
+      order_by: [asc: j.worker, desc_nulls_last: j.attempted_at],
       select: %{
         worker: j.worker,
         completed_at: j.completed_at,

@@ -193,9 +193,9 @@ defmodule PokevestmentWeb.PredictionComponents do
   attr :explanation, :map, required: true
 
   def explanation_panel(assigns) do
-    explanation = assigns.explanation || %{}
-    positive = explanation["positive_reasons"] || []
-    negative = explanation["negative_reasons"] || []
+    explanation = if is_map(assigns.explanation), do: assigns.explanation, else: %{}
+    positive = get_reasons(explanation, "positive_reasons", :positive_reasons)
+    negative = get_reasons(explanation, "negative_reasons", :negative_reasons)
 
     assigns =
       assigns
@@ -415,6 +415,11 @@ defmodule PokevestmentWeb.PredictionComponents do
     v = to_float(value)
     sign = if v >= 0, do: "+", else: ""
     "#{sign}#{:erlang.float_to_binary(v, decimals: 4)}"
+  end
+
+  defp get_reasons(map, string_key, atom_key) do
+    val = Map.get(map, string_key) || Map.get(map, atom_key) || []
+    if is_list(val), do: val, else: []
   end
 
   defp confidence_color(level), do: Map.get(@confidence_colors, level, "bg-olive-100 text-olive-700")
