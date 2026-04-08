@@ -323,6 +323,7 @@ defmodule Pokevestment.Ingestion.Transformer do
   defp build_ptcg_tcgplayer_snapshots(card_id, tcgplayer, today) do
     source_updated_at = parse_datetime(tcgplayer["updatedAt"])
     product_id = extract_product_id_from_url(tcgplayer["url"])
+    marketplace_url = tcgplayer["url"]
     prices = tcgplayer["prices"] || %{}
 
     Enum.flat_map(prices, fn
@@ -340,6 +341,7 @@ defmodule Pokevestment.Ingestion.Transformer do
             price_market: to_decimal(data["market"]),
             price_direct_low: to_decimal(data["directLow"]),
             product_id: product_id,
+            metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url}),
             source_updated_at: source_updated_at
           }
         ]
@@ -354,6 +356,7 @@ defmodule Pokevestment.Ingestion.Transformer do
   defp build_ptcg_cardmarket_snapshots(card_id, cardmarket, today) do
     source_updated_at = parse_datetime(cardmarket["updatedAt"])
     product_id = extract_product_id_from_url(cardmarket["url"])
+    marketplace_url = cardmarket["url"]
     prices = cardmarket["prices"] || %{}
 
     base = %{
@@ -369,6 +372,7 @@ defmodule Pokevestment.Ingestion.Transformer do
       price_avg7: to_decimal(prices["avg7"]),
       price_avg30: to_decimal(prices["avg30"]),
       product_id: product_id,
+      metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url}),
       source_updated_at: source_updated_at
     }
 
@@ -395,6 +399,7 @@ defmodule Pokevestment.Ingestion.Transformer do
         price_avg7: to_decimal(prices["reverseHoloAvg7"]),
         price_avg30: to_decimal(prices["reverseHoloAvg30"]),
         product_id: product_id,
+        metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url}),
         source_updated_at: source_updated_at
       }
 

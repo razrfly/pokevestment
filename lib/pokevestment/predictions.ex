@@ -10,6 +10,7 @@ defmodule Pokevestment.Predictions do
   alias Pokevestment.Cards.{Card, CardType, Set}
   alias Pokevestment.ML.CardPrediction
   alias Pokevestment.ML.PredictionSnapshot
+  alias Pokevestment.Pricing.PriceSnapshot
   alias Pokevestment.Tournaments.Tournament
 
   @doc """
@@ -214,6 +215,31 @@ defmodule Pokevestment.Predictions do
     tournaments = Repo.aggregate(Tournament, :count)
 
     %{cards: cards, sets: sets, tournaments: tournaments}
+  end
+
+  @doc """
+  Returns marketplace URLs for a list of card IDs, keyed by card_id and source.
+
+  Returns `%{card_id => %{"tcgplayer" => url, "cardmarket" => url}}`.
+  URLs come from the latest price_snapshot metadata for each card+source.
+  """
+  def marketplace_urls_for_cards([]), do: %{}
+
+  def marketplace_urls_for_cards(card_ids) do
+    from(ps in PriceSnapshot,
+      where: ps.card_id in ^card_ids,
+      where: not is_nil(ps.metadata),
+      where: fragment("? ->> 'marketplace_url' IS NOT NULL", ps.metadata),
+      distinct: [ps.card_id, ps.source],
+      order_by: [ps.card_id, ps.source, desc: ps.snapshot_date],
+      select: {ps.card_id, ps.source, fragment("? ->> 'marketplace_url'", ps.metadata)}
+    )
+    |> Repo.all()
+    |> Enum.group_by(
+      fn {card_id, _, _} -> card_id end,
+      fn {_, source, url} -> {source, url} end
+    )
+    |> Map.new(fn {card_id, source_urls} -> {card_id, Map.new(source_urls)} end)
   end
 
   @doc """

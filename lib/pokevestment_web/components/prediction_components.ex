@@ -112,6 +112,42 @@ defmodule PokevestmentWeb.PredictionComponents do
     """
   end
 
+  # Marketplace link
+
+  attr :urls, :map, required: true
+  attr :price_source, :string, default: nil
+
+  def marketplace_link(assigns) do
+    # Show the link matching the prediction's price source, or fall back to first available
+    url =
+      if assigns.price_source do
+        Map.get(assigns.urls, assigns.price_source) || Map.values(assigns.urls) |> List.first()
+      else
+        Map.values(assigns.urls) |> List.first()
+      end
+
+    source_label =
+      case assigns.price_source do
+        "tcgplayer" -> "TCGPlayer"
+        "cardmarket" -> "Cardmarket"
+        _ -> "Marketplace"
+      end
+
+    assigns = assign(assigns, url: url, source_label: source_label)
+
+    ~H"""
+    <a
+      :if={@url}
+      href={@url}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="mt-1 inline-flex items-center gap-1 text-xs text-olive-500 hover:text-olive-700 dark:text-olive-500 dark:hover:text-olive-300"
+    >
+      {@source_label} &#8599;
+    </a>
+    """
+  end
+
   # Umbrella breakdown
 
   attr :breakdown, :map, required: true
