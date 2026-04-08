@@ -139,7 +139,7 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
 
         {:exit, reason}, {total_ok, total_fails, total_sold, total_listing} ->
           Logger.warning("[CardDetailBackfill] Task exited: #{inspect(reason)}")
-          {total_ok, [:exit_timeout | total_fails], total_sold, total_listing}
+          {total_ok, [{:exit, reason} | total_fails], total_sold, total_listing}
       end)
 
     %{updated: updated, failed: failed, sold_added: sold_added, listing_added: listing_added}
@@ -192,14 +192,24 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
           from(ct in CardType, where: ct.card_id == ^card.id) |> Repo.delete_all()
 
           Enum.each(type_attrs, fn attrs ->
-            %CardType{} |> CardType.changeset(attrs) |> Repo.insert(on_conflict: :nothing)
+            case %CardType{} |> CardType.changeset(attrs) |> Repo.insert(on_conflict: :nothing) do
+              {:ok, _} -> :ok
+              {:error, cs} ->
+                Logger.warning("[CardDetailBackfill] CardType insert failed for #{card.id}: #{inspect(cs.errors)}")
+                Repo.rollback({:card_type_failed, card.id, cs.errors})
+            end
           end)
 
           from(cd in CardDexId, where: cd.card_id == ^card.id) |> Repo.delete_all()
 
           Enum.each(dex_id_attrs, fn attrs ->
             if MapSet.member?(species_ids, attrs[:dex_id]) do
-              %CardDexId{} |> CardDexId.changeset(attrs) |> Repo.insert(on_conflict: :nothing)
+              case %CardDexId{} |> CardDexId.changeset(attrs) |> Repo.insert(on_conflict: :nothing) do
+                {:ok, _} -> :ok
+                {:error, cs} ->
+                  Logger.warning("[CardDetailBackfill] CardDexId insert failed for #{card.id}: #{inspect(cs.errors)}")
+                  Repo.rollback({:card_dex_id_failed, card.id, cs.errors})
+              end
             end
           end)
 
@@ -213,6 +223,7 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
               {:ok, _} -> :ok
               {:error, cs} ->
                 Logger.warning("[CardDetailBackfill] SoldPrice insert failed for #{card.id}: #{inspect(cs.errors)}")
+                Repo.rollback({:sold_price_failed, card.id, cs.errors})
             end
           end)
 
@@ -226,6 +237,7 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
               {:ok, _} -> :ok
               {:error, cs} ->
                 Logger.warning("[CardDetailBackfill] ListingPrice insert failed for #{card.id}: #{inspect(cs.errors)}")
+                Repo.rollback({:listing_price_failed, card.id, cs.errors})
             end
           end)
 
