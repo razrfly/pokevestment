@@ -358,14 +358,28 @@ defmodule Pokevestment.ML.FeatureMatrixTest do
     test "price momentum uses Cardmarket rolling averages even when canonical price is from TCGPlayer" do
       {:ok, df} = FeatureMatrix.assemble()
 
-      momentum =
+      pokemon_row =
         df
-        |> Explorer.DataFrame.pull("price_momentum_7d")
+        |> Explorer.DataFrame.filter_with(fn ldf ->
+          Explorer.Series.equal(ldf["card_id"], "sv06-040")
+        end)
+
+      # Canonical price should come from TCGPlayer
+      source =
+        pokemon_row
+        |> Explorer.DataFrame.pull("price_source")
         |> Explorer.Series.to_list()
+
+      assert hd(source) == "tcgplayer"
 
       # Rolling averages come from Cardmarket via separate CTE, so momentum is computed
       # even when canonical_price is from TCGPlayer
-      assert Enum.any?(momentum, fn val -> val != nil end)
+      momentum =
+        pokemon_row
+        |> Explorer.DataFrame.pull("price_momentum_7d")
+        |> Explorer.Series.to_list()
+
+      assert hd(momentum) != nil
     end
 
     test "derived features are correct" do
