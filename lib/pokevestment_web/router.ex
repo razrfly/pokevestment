@@ -25,6 +25,7 @@ defmodule PokevestmentWeb.Router do
 
     live "/sets", SetLive.Index, :index
     live "/sets/:id", SetLive.Show, :show
+    live "/sets/:set_id/cards/:card_id", CardLive.Show, :show
 
     live "/models", ModelLive.Index, :index
   end

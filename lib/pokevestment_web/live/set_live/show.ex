@@ -55,7 +55,7 @@ defmodule PokevestmentWeb.SetLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, expanded: MapSet.new(), set_types: [])}
+    {:ok, assign(socket, set_types: [])}
   end
 
   @impl true
@@ -123,14 +123,6 @@ defmodule PokevestmentWeb.SetLive.Show do
     {:noreply, push_patch(socket, to: ~p"/sets/#{socket.assigns.set.id}")}
   end
 
-  def handle_event("toggle", %{"card-id" => card_id}, socket) do
-    expanded =
-      if MapSet.member?(socket.assigns.expanded, card_id),
-        do: MapSet.delete(socket.assigns.expanded, card_id),
-        else: MapSet.put(socket.assigns.expanded, card_id)
-
-    {:noreply, assign(socket, expanded: expanded)}
-  end
 
   @impl true
   def render(assigns) do
@@ -271,9 +263,10 @@ defmodule PokevestmentWeb.SetLive.Show do
 
         <%!-- Card grid --%>
         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div
+          <.link
             :for={prediction <- @predictions}
-            class="overflow-hidden rounded-2xl border border-olive-200 bg-white/60 dark:border-olive-800 dark:bg-olive-900/40"
+            navigate={~p"/sets/#{@set.id}/cards/#{prediction.card_id}"}
+            class="group overflow-hidden rounded-2xl border border-olive-200 bg-white/60 transition-colors hover:border-olive-300 hover:bg-white dark:border-olive-800 dark:bg-olive-900/40 dark:hover:border-olive-700 dark:hover:bg-olive-900/60"
           >
             <%!-- Card image --%>
             <div :if={prediction.card.image_url} class="aspect-[2/3] overflow-hidden bg-olive-100 dark:bg-olive-900">
@@ -281,7 +274,7 @@ defmodule PokevestmentWeb.SetLive.Show do
                 src={prediction.card.image_url}
                 alt={prediction.card.name}
                 loading="lazy"
-                class="h-full w-full object-contain"
+                class="h-full w-full object-contain transition-transform group-hover:scale-105"
               />
             </div>
 
@@ -308,51 +301,8 @@ defmodule PokevestmentWeb.SetLive.Show do
                   price_currency={prediction.price_currency}
                 />
               </div>
-
-              <%!-- Marketplace link --%>
-              <.marketplace_link
-                :if={@marketplace_urls[prediction.card_id]}
-                urls={@marketplace_urls[prediction.card_id]}
-                price_source={prediction.price_source}
-              />
-
-              <%!-- Expand toggle --%>
-              <button
-                phx-click="toggle"
-                phx-value-card-id={prediction.card_id}
-                class="mt-3 w-full text-center text-xs text-olive-500 hover:text-olive-700 dark:text-olive-500 dark:hover:text-olive-300"
-              >
-                {if MapSet.member?(@expanded, prediction.card_id), do: "Hide details \u25B2", else: "Show details \u25BC"}
-              </button>
-
-              <%!-- Expanded panel --%>
-              <div :if={MapSet.member?(@expanded, prediction.card_id)} class="mt-3 space-y-4 border-t border-olive-200 pt-3 dark:border-olive-800">
-                <%!-- Umbrella breakdown --%>
-                <div :if={prediction.umbrella_breakdown && prediction.umbrella_breakdown != %{}}>
-                  <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-olive-500 dark:text-olive-500">
-                    Value Drivers
-                  </h4>
-                  <.umbrella_breakdown breakdown={prediction.umbrella_breakdown} />
-                </div>
-
-                <%!-- Positive drivers --%>
-                <div :if={prediction.top_positive_drivers && prediction.top_positive_drivers != %{}}>
-                  <h4 class="mb-1 text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                    Top Positive
-                  </h4>
-                  <.driver_list drivers={prediction.top_positive_drivers} kind={:positive} />
-                </div>
-
-                <%!-- Negative drivers --%>
-                <div :if={prediction.top_negative_drivers && prediction.top_negative_drivers != %{}}>
-                  <h4 class="mb-1 text-xs font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">
-                    Top Negative
-                  </h4>
-                  <.driver_list drivers={prediction.top_negative_drivers} kind={:negative} />
-                </div>
-              </div>
             </div>
-          </div>
+          </.link>
         </div>
 
         <%!-- Empty state --%>

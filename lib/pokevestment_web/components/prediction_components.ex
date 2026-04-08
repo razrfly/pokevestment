@@ -4,6 +4,8 @@ defmodule PokevestmentWeb.PredictionComponents do
   """
   use Phoenix.Component
 
+  alias Pokevestment.ML.FeatureDescriptions
+
   @signal_colors %{
     "STRONG_BUY" => "bg-emerald-700 text-emerald-50 dark:bg-emerald-500/20 dark:text-emerald-400",
     "BUY" => "bg-lime-700 text-lime-50 dark:bg-lime-500/20 dark:text-lime-400",
@@ -20,56 +22,6 @@ defmodule PokevestmentWeb.PredictionComponents do
     "price_momentum" => "💰",
     "card_attributes" => "⚔️",
     "illustrator" => "🎭"
-  }
-
-  @feature_labels %{
-    "meta_share_30d" => "30-day Meta Share",
-    "meta_share_90d" => "90-day Meta Share",
-    "meta_share_all" => "All-time Meta Share",
-    "top8_appearances_30d" => "Top 8 (30d)",
-    "top8_appearances_90d" => "Top 8 (90d)",
-    "top8_appearances_all" => "Top 8 (all-time)",
-    "win_rate_30d" => "Win Rate (30d)",
-    "win_rate_90d" => "Win Rate (90d)",
-    "deck_diversity_30d" => "Deck Diversity (30d)",
-    "deck_diversity_90d" => "Deck Diversity (90d)",
-    "rarity_encoded" => "Rarity",
-    "is_secret_rare" => "Secret Rare",
-    "is_full_art" => "Full Art",
-    "is_alternate_art" => "Alternate Art",
-    "art_type_encoded" => "Art Type",
-    "generation" => "Generation",
-    "has_ability" => "Has Ability",
-    "ability_count" => "Ability Count",
-    "attack_count" => "Attack Count",
-    "hp" => "HP",
-    "retreat_cost" => "Retreat Cost",
-    "weakness_count" => "Weaknesses",
-    "resistance_count" => "Resistances",
-    "total_attack_damage" => "Total Attack Damage",
-    "max_attack_damage" => "Max Attack Damage",
-    "energy_cost_total" => "Total Energy Cost",
-    "secret_rare_ratio" => "Set Secret Rare Ratio",
-    "secret_rare_count" => "Set Secret Rares",
-    "card_count_total" => "Set Card Count",
-    "era_encoded" => "Era",
-    "set_age_days" => "Set Age (days)",
-    "days_since_release" => "Days Since Release",
-    "log_price_avg_7d" => "7-day Avg Price",
-    "log_price_avg_30d" => "30-day Avg Price",
-    "price_volatility_7d" => "7-day Price Volatility",
-    "price_volatility_30d" => "30-day Price Volatility",
-    "price_trend_7d" => "7-day Price Trend",
-    "price_trend_30d" => "30-day Price Trend",
-    "language_count" => "Language Availability",
-    "illustrator_encoded" => "Illustrator",
-    "illustrator_card_count" => "Illustrator Portfolio",
-    "illustrator_avg_price" => "Illustrator Avg Price",
-    "stage_encoded" => "Evolution Stage",
-    "energy_type_encoded" => "Energy Type",
-    "category_encoded" => "Category",
-    "first_edition" => "First Edition",
-    "is_shadowless" => "Shadowless"
   }
 
   # Signal badge
@@ -224,7 +176,180 @@ defmodule PokevestmentWeb.PredictionComponents do
     """
   end
 
+  # Explanation text
+
+  attr :explanation, :string, required: true
+
+  def explanation_text(assigns) do
+    ~H"""
+    <p class="text-sm text-olive-700 dark:text-olive-300 italic">
+      {@explanation}
+    </p>
+    """
+  end
+
+  # Explanation panel (structured map version)
+
+  attr :explanation, :map, required: true
+
+  def explanation_panel(assigns) do
+    ~H"""
+    <div class="space-y-3">
+      <p class="text-sm font-medium text-olive-800 dark:text-olive-200">
+        {@explanation["summary"]}
+      </p>
+
+      <ul :if={@explanation["positive_reasons"] != []} class="space-y-1.5">
+        <li :for={reason <- @explanation["positive_reasons"]} class="flex items-start gap-2 text-sm">
+          <span class="mt-1 block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-500" />
+          <span>
+            <span class="font-medium text-emerald-700 dark:text-emerald-400">{reason["label"]}</span>
+            <span class="text-olive-600 dark:text-olive-400"> — {reason["explanation"]}</span>
+          </span>
+        </li>
+      </ul>
+
+      <ul :if={@explanation["negative_reasons"] != []} class="space-y-1.5">
+        <li :for={reason <- @explanation["negative_reasons"]} class="flex items-start gap-2 text-sm">
+          <span class="mt-1 block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
+          <span>
+            <span class="font-medium text-red-700 dark:text-red-400">{reason["label"]}</span>
+            <span class="text-olive-600 dark:text-olive-400"> — {reason["explanation"]}</span>
+          </span>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  # Projection table (full table version with confidence)
+
+  attr :projections, :map, required: true
+  attr :currency, :string, default: nil
+
+  @confidence_colors %{
+    "high" => "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400",
+    "medium" => "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400",
+    "low" => "bg-olive-100 text-olive-700 dark:bg-olive-500/20 dark:text-olive-400"
+  }
+
+  def projection_table(assigns) do
+    sorted =
+      assigns.projections
+      |> Enum.sort_by(fn {k, _v} -> String.to_integer(k) end)
+
+    assigns = assign(assigns, sorted: sorted, symbol: currency_symbol(assigns.currency))
+
+    ~H"""
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-olive-200 dark:border-olive-700">
+            <th class="py-2 pr-4 text-left text-xs font-semibold uppercase tracking-wider text-olive-500 dark:text-olive-500">Horizon</th>
+            <th class="py-2 pr-4 text-right text-xs font-semibold uppercase tracking-wider text-olive-500 dark:text-olive-500">Price</th>
+            <th class="py-2 pr-4 text-right text-xs font-semibold uppercase tracking-wider text-olive-500 dark:text-olive-500">Return</th>
+            <th class="py-2 text-center text-xs font-semibold uppercase tracking-wider text-olive-500 dark:text-olive-500">Confidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={{horizon, data} <- @sorted} class="border-b border-olive-100 last:border-0 dark:border-olive-800">
+            <td class="py-2 pr-4 text-sm font-medium text-olive-900 dark:text-olive-100">
+              {horizon_label(horizon)}
+            </td>
+            <td class="py-2 pr-4 text-right text-sm tabular-nums font-semibold text-olive-900 dark:text-olive-100">
+              {@symbol}{format_decimal(data["projected_price"])}
+            </td>
+            <td class={["py-2 pr-4 text-right text-sm tabular-nums font-medium", return_color_class(data["projected_return"])]}>
+              {format_return(data["projected_return"])}
+            </td>
+            <td class="py-2 text-center">
+              <span class={[
+                "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                confidence_color(data["confidence"])
+              ]}>
+                {data["confidence"] || "—"}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="mt-2 text-xs text-olive-400 dark:text-olive-600">
+        Based on variable-rate convergence model adjusted for volatility, card age, and meta presence.
+      </p>
+    </div>
+    """
+  end
+
+  # Horizon projections (original compact version, kept for backward compat)
+
+  attr :projections, :map, required: true
+  attr :currency, :string, default: nil
+
+  @horizon_labels %{"1" => "1d", "7" => "7d", "30" => "30d", "90" => "90d", "365" => "1yr"}
+
+  def horizon_projections(assigns) do
+    sorted =
+      assigns.projections
+      |> Enum.sort_by(fn {k, _v} -> String.to_integer(k) end)
+
+    assigns = assign(assigns, sorted: sorted, symbol: currency_symbol(assigns.currency))
+
+    ~H"""
+    <div class="grid grid-cols-4 gap-2 text-center">
+      <div :for={{horizon, data} <- @sorted} class="space-y-0.5">
+        <span class="block text-[10px] font-medium uppercase tracking-wider text-olive-500 dark:text-olive-500">
+          {horizon_label(horizon)}
+        </span>
+        <span class="block text-xs font-semibold text-olive-900 dark:text-olive-100">
+          {@symbol}{format_decimal(data["projected_price"])}
+        </span>
+        <span class={["block text-[10px] font-medium tabular-nums", return_color_class(data["projected_return"])]}>
+          {format_return(data["projected_return"])}
+        </span>
+      </div>
+    </div>
+    """
+  end
+
   # Helpers
+
+  defp horizon_label(key), do: Map.get(@horizon_labels, key, "#{key}d")
+
+  defp return_color_class(nil), do: "text-olive-500"
+
+  defp return_color_class(%Decimal{} = d) do
+    case Decimal.compare(d, Decimal.new(0)) do
+      :gt -> "text-emerald-600 dark:text-emerald-400"
+      :lt -> "text-red-600 dark:text-red-400"
+      _ -> "text-olive-500 dark:text-olive-500"
+    end
+  end
+
+  defp return_color_class(n) when is_number(n) do
+    cond do
+      n > 0 -> "text-emerald-600 dark:text-emerald-400"
+      n < 0 -> "text-red-600 dark:text-red-400"
+      true -> "text-olive-500 dark:text-olive-500"
+    end
+  end
+
+  defp return_color_class(_), do: "text-olive-500"
+
+  defp format_return(nil), do: "—"
+
+  defp format_return(%Decimal{} = d) do
+    val = Decimal.to_float(d) * 100
+    sign = if val >= 0, do: "+", else: ""
+    "#{sign}#{:erlang.float_to_binary(val, decimals: 1)}%"
+  end
+
+  defp format_return(n) when is_number(n) do
+    val = n * 100
+    sign = if val >= 0, do: "+", else: ""
+    "#{sign}#{:erlang.float_to_binary(val, decimals: 1)}%"
+  end
+
+  defp format_return(_), do: "—"
 
   defp format_signal(signal) do
     signal
@@ -275,20 +400,15 @@ defmodule PokevestmentWeb.PredictionComponents do
     "#{sign}#{:erlang.float_to_binary(v * 100, decimals: 1)}%"
   end
 
-  defp feature_label(feature), do: Map.get(@feature_labels, feature, humanize_feature(feature))
-
-  defp humanize_feature(name) do
-    name
-    |> String.replace("_", " ")
-    |> String.split(" ")
-    |> Enum.map_join(" ", &String.capitalize/1)
-  end
+  defp feature_label(feature), do: FeatureDescriptions.label(feature)
 
   defp format_driver_value(value) do
     v = to_float(value)
     sign = if v >= 0, do: "+", else: ""
     "#{sign}#{:erlang.float_to_binary(v, decimals: 4)}"
   end
+
+  defp confidence_color(level), do: Map.get(@confidence_colors, level, "bg-olive-100 text-olive-700")
 
   defp currency_symbol("EUR"), do: "€"
   defp currency_symbol("USD"), do: "$"

@@ -198,7 +198,7 @@ defmodule PokevestmentWeb.HomeLive do
   defp buy_card(assigns) do
     ~H"""
     <.link
-      navigate={~p"/sets/#{@prediction.card.set_id}"}
+      navigate={~p"/sets/#{@prediction.card.set_id}/cards/#{@prediction.card_id}"}
       class="group flex-shrink-0 snap-start w-56 rounded-2xl border border-olive-200 bg-white/60 overflow-hidden transition-colors hover:border-olive-300 hover:bg-white dark:border-olive-800 dark:bg-olive-900/40 dark:hover:border-olive-700 dark:hover:bg-olive-900/60"
     >
       <div :if={@prediction.card.image_url} class="aspect-[2/3] overflow-hidden bg-olive-100 dark:bg-olive-900">

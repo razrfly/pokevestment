@@ -14,11 +14,17 @@ defmodule Pokevestment.ML.Accountability do
   @doc """
   Signal accuracy breakdown by signal type.
 
+  Options:
+    * `:horizon_days` - filter by horizon (default: 30)
+
   Returns `%{"STRONG_BUY" => %{total: n, correct: n, accuracy: float}, ...}` or `%{}`.
   """
-  def signal_accuracy(model_version \\ "v1.0.0") do
+  def signal_accuracy(model_version \\ "v1.0.0", opts \\ []) do
+    horizon = Keyword.get(opts, :horizon_days, 30)
+
     from(po in PredictionOutcome,
       where: po.model_version == ^model_version,
+      where: po.horizon_days == ^horizon,
       where: not is_nil(po.signal_correct),
       group_by: po.signal,
       select: {
@@ -39,11 +45,17 @@ defmodule Pokevestment.ML.Accountability do
   @doc """
   Signal calibration — mean and median actual returns per signal type.
 
+  Options:
+    * `:horizon_days` - filter by horizon (default: 30)
+
   Returns `%{"STRONG_BUY" => %{mean_return: float, median_return: float}, ...}` or `%{}`.
   """
-  def signal_calibration(model_version \\ "v1.0.0") do
+  def signal_calibration(model_version \\ "v1.0.0", opts \\ []) do
+    horizon = Keyword.get(opts, :horizon_days, 30)
+
     from(po in PredictionOutcome,
       where: po.model_version == ^model_version,
+      where: po.horizon_days == ^horizon,
       where: not is_nil(po.actual_return),
       group_by: po.signal,
       select: {
@@ -126,13 +138,17 @@ defmodule Pokevestment.ML.Accountability do
   end
 
   @doc """
-  How many prediction snapshots are mature (>=30 days old) and ready for evaluation.
+  How many prediction snapshots are mature and ready for evaluation.
+
+  Options:
+    * `:horizon_days` - maturity window in days (default: 30)
 
   Returns `%{mature_snapshots: n, evaluated: n, pending_evaluation: n, earliest_maturity: date | nil}`.
   """
-  def outcome_readiness(model_version \\ "v1.0.0") do
+  def outcome_readiness(model_version \\ "v1.0.0", opts \\ []) do
+    horizon = Keyword.get(opts, :horizon_days, 30)
     today = Date.utc_today()
-    cutoff = Date.add(today, -30)
+    cutoff = Date.add(today, -horizon)
 
     mature_count =
       from(ps in PredictionSnapshot,
@@ -144,12 +160,13 @@ defmodule Pokevestment.ML.Accountability do
       )
       |> Repo.one()
 
-    # Count outcomes that match the same eligible snapshot population
+    # Count outcomes that match the same eligible snapshot population for this horizon
     evaluated_count =
       from(po in PredictionOutcome,
         join: ps in PredictionSnapshot,
         on: po.prediction_snapshot_id == ps.id,
         where: ps.model_version == ^model_version,
+        where: po.horizon_days == ^horizon,
         where: ps.prediction_date <= ^cutoff,
         where: ps.signal != "INSUFFICIENT_DATA",
         where: not is_nil(ps.current_price) and ps.current_price > 0,
@@ -166,7 +183,7 @@ defmodule Pokevestment.ML.Accountability do
       )
       |> Repo.one()
 
-    earliest_maturity = if earliest, do: Date.add(earliest, 30), else: nil
+    earliest_maturity = if earliest, do: Date.add(earliest, horizon), else: nil
 
     %{
       mature_snapshots: mature_count || 0,

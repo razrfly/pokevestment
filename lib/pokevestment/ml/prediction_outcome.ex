@@ -27,6 +27,7 @@ defmodule Pokevestment.ML.PredictionOutcome do
     field :signal_correct, :boolean
     field :outcome_price_source, :string
     field :outcome_price_currency, :string
+    field :horizon_days, :integer, default: 30
 
     belongs_to :prediction_snapshot, Pokevestment.ML.PredictionSnapshot
     belongs_to :card, Pokevestment.Cards.Card, type: :string
@@ -34,7 +35,7 @@ defmodule Pokevestment.ML.PredictionOutcome do
     timestamps(type: :utc_datetime)
   end
 
-  @cast_fields ~w(model_version prediction_date outcome_date signal predicted_fair_value price_at_prediction price_at_outcome actual_return signal_correct outcome_price_source outcome_price_currency)a
+  @cast_fields ~w(model_version prediction_date outcome_date signal predicted_fair_value price_at_prediction price_at_outcome actual_return signal_correct outcome_price_source outcome_price_currency horizon_days)a
   @required_fields ~w(model_version prediction_date outcome_date signal)a
 
   def changeset(outcome, attrs) do
@@ -43,7 +44,7 @@ defmodule Pokevestment.ML.PredictionOutcome do
     |> validate_required(@required_fields)
     |> validate_length(:model_version, max: 20)
     |> validate_length(:signal, max: 20)
-    |> unique_constraint(:prediction_snapshot_id)
+    |> unique_constraint([:prediction_snapshot_id, :horizon_days])
     |> foreign_key_constraint(:prediction_snapshot_id)
     |> foreign_key_constraint(:card_id)
   end
