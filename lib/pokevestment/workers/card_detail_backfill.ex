@@ -137,6 +137,9 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
       {:ok, {:error, reason}} ->
         {:error, reason}
 
+      {:exit, reason} ->
+        {:error, {:exit, reason}}
+
       nil ->
         {:error, :timeout}
     end

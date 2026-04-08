@@ -86,7 +86,7 @@ defmodule Pokevestment.Ingestion.DataQuality do
 
     cards_with_prices =
       from(sp in SoldPrice,
-        where: sp.snapshot_date >= ^week_ago,
+        where: sp.snapshot_date >= ^week_ago and sp.snapshot_date <= ^today,
         select: count(sp.card_id, :distinct)
       )
       |> Repo.one()

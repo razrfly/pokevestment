@@ -164,8 +164,7 @@ defmodule Pokevestment.ML.FeatureMatrix do
               c.variants IS NULL
               OR (variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
               OR (variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
-              OR (variant = 'holo' AND (c.variants->>'holo')::boolean IS NOT FALSE)
-              OR (variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
+              OR (variant IN ('reverse-holofoil', 'holo') AND (c.variants->>'reverse')::boolean IS NOT FALSE)
               OR variant NOT IN ('normal', 'holofoil', 'holo', 'reverse-holofoil')
             )
           ORDER BY snapshot_date DESC,
@@ -174,9 +173,8 @@ defmodule Pokevestment.ML.FeatureMatrix do
               WHEN marketplace = 'tcgplayer' AND variant = 'holofoil' THEN 2
               WHEN marketplace = 'tcgplayer' AND variant = 'reverse-holofoil' THEN 3
               WHEN marketplace = 'cardmarket' AND variant = 'normal' THEN 4
-              WHEN marketplace = 'cardmarket' AND variant = 'holo' THEN 5
-              WHEN marketplace = 'cardmarket' AND variant = 'reverse-holofoil' THEN 6
-              ELSE 7
+              WHEN marketplace = 'cardmarket' AND variant IN ('reverse-holofoil', 'holo') THEN 5
+              ELSE 6
             END
           LIMIT 1
         ) sp ON true

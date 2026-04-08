@@ -161,7 +161,7 @@ defmodule Pokevestment.Ingestion.TransformerTest do
       refute "holo" in listing_variants
     end
 
-    test "includes holo row when at least one value is positive" do
+    test "includes reverse-holofoil row when at least one holo value is positive" do
       pricing = %{
         "cardmarket" => %{
           "updated" => "2026-04-01T00:00:00Z",
@@ -181,7 +181,7 @@ defmodule Pokevestment.Ingestion.TransformerTest do
       {sold, _listing} = Transformer.build_prices("test-001", pricing, "tcgdex")
       sold_variants = Enum.map(sold, & &1.variant)
       assert "normal" in sold_variants
-      assert "holo" in sold_variants
+      assert "reverse-holofoil" in sold_variants
     end
   end
 

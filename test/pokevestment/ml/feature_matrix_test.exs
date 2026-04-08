@@ -355,7 +355,7 @@ defmodule Pokevestment.ML.FeatureMatrixTest do
       assert hd(canonical) > 80.0
     end
 
-    test "price momentum is nil for TCGPlayer-sourced cards (no avg_1d/avg_7d data)" do
+    test "price momentum uses Cardmarket rolling averages even when canonical price is from TCGPlayer" do
       {:ok, df} = FeatureMatrix.assemble()
 
       momentum =
@@ -363,8 +363,9 @@ defmodule Pokevestment.ML.FeatureMatrixTest do
         |> Explorer.DataFrame.pull("price_momentum_7d")
         |> Explorer.Series.to_list()
 
-      # TCGPlayer is preferred and has no price_avg_1d/price_avg_7d/price_avg_30d, so momentum is nil
-      assert Enum.all?(momentum, &is_nil/1)
+      # Rolling averages come from Cardmarket via separate CTE, so momentum is computed
+      # even when canonical_price is from TCGPlayer
+      assert Enum.any?(momentum, fn val -> val != nil end)
     end
 
     test "derived features are correct" do

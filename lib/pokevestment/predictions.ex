@@ -10,7 +10,7 @@ defmodule Pokevestment.Predictions do
   alias Pokevestment.Cards.{Card, CardType, Set}
   alias Pokevestment.ML.CardPrediction
   alias Pokevestment.ML.PredictionSnapshot
-  alias Pokevestment.Pricing.SoldPrice
+  alias Pokevestment.Pricing.{SoldPrice, ListingPrice}
   alias Pokevestment.Tournaments.Tournament
 
   @doc """
@@ -239,7 +239,7 @@ defmodule Pokevestment.Predictions do
       |> Repo.all()
 
     listing_urls =
-      from(lp in Pokevestment.Pricing.ListingPrice,
+      from(lp in ListingPrice,
         where: lp.card_id in ^card_ids,
         where: not is_nil(lp.metadata),
         where: fragment("? ->> 'marketplace_url' IS NOT NULL", lp.metadata),

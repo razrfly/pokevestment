@@ -55,9 +55,21 @@ defmodule PokevestmentWeb.HealthController do
   end
 
   defp check_price_freshness do
-    query = from(sp in "sold_prices", select: max(sp.snapshot_date))
+    sold_query = from(sp in "sold_prices", select: max(sp.snapshot_date))
+    listing_query = from(lp in "listing_prices", select: max(lp.snapshot_date))
 
-    case Pokevestment.Repo.one(query) do
+    sold_date = Pokevestment.Repo.one(sold_query)
+    listing_date = Pokevestment.Repo.one(listing_query)
+
+    latest_date =
+      case {sold_date, listing_date} do
+        {nil, nil} -> nil
+        {nil, d} -> d
+        {d, nil} -> d
+        {s, l} -> if Date.compare(s, l) == :gt, do: s, else: l
+      end
+
+    case latest_date do
       nil ->
         %{status: "no_data", last_snapshot_date: nil, hours_since_last: nil}
 

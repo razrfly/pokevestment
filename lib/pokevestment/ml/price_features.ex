@@ -23,35 +23,52 @@ defmodule Pokevestment.ML.PriceFeatures do
 
   defp query do
     """
-    SELECT DISTINCT ON (sp.card_id)
-      sp.card_id,
-      sp.marketplace AS source,
-      sp.currency_original AS currency,
-      sp.price_usd::float AS canonical_price,
-      sp.price_avg_1d::float,
-      sp.price_avg_7d::float,
-      sp.price_avg_30d::float
-    FROM sold_prices sp
-    JOIN cards c ON c.id = sp.card_id
-    WHERE sp.price_usd IS NOT NULL AND sp.price_usd > 0
-      AND (
-        c.variants IS NULL
-        OR (sp.variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
-        OR (sp.variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
-        OR (sp.variant = 'holo' AND (c.variants->>'holo')::boolean IS NOT FALSE)
-        OR (sp.variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
-        OR sp.variant NOT IN ('normal', 'holofoil', 'holo', 'reverse-holofoil')
-      )
-    ORDER BY sp.card_id, sp.snapshot_date DESC,
-      CASE
-        WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' THEN 1
-        WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' THEN 2
-        WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 3
-        WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 4
-        WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'holo' THEN 5
-        WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 6
-        ELSE 7
-      END
+    WITH canonical AS (
+      SELECT DISTINCT ON (sp.card_id)
+        sp.card_id,
+        sp.marketplace AS source,
+        sp.currency_original AS currency,
+        sp.price_usd::float AS canonical_price
+      FROM sold_prices sp
+      JOIN cards c ON c.id = sp.card_id
+      WHERE sp.price_usd IS NOT NULL AND sp.price_usd > 0
+        AND (
+          c.variants IS NULL
+          OR (sp.variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
+          OR (sp.variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+          OR (sp.variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
+          OR sp.variant NOT IN ('normal', 'holofoil', 'reverse-holofoil')
+        )
+      ORDER BY sp.card_id, sp.snapshot_date DESC,
+        CASE
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' THEN 1
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' THEN 2
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 3
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 4
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 5
+          ELSE 6
+        END
+    ),
+    rolling_avgs AS (
+      SELECT DISTINCT ON (sp.card_id)
+        sp.card_id,
+        sp.price_avg_1d::float,
+        sp.price_avg_7d::float,
+        sp.price_avg_30d::float
+      FROM sold_prices sp
+      WHERE sp.price_avg_1d IS NOT NULL OR sp.price_avg_7d IS NOT NULL OR sp.price_avg_30d IS NOT NULL
+      ORDER BY sp.card_id, sp.snapshot_date DESC
+    )
+    SELECT
+      c.card_id,
+      c.source,
+      c.currency,
+      c.canonical_price,
+      r.price_avg_1d,
+      r.price_avg_7d,
+      r.price_avg_30d
+    FROM canonical c
+    LEFT JOIN rolling_avgs r ON r.card_id = c.card_id
     """
   end
 

@@ -266,9 +266,18 @@ defmodule Pokevestment.Ingestion.Transformer do
         mid = to_decimal(data["midPrice"])
         high = to_decimal(data["highPrice"])
         direct_low = to_decimal(data["directLowPrice"])
-        {low_usd, _, _} = ExchangeRate.convert_to_usd(low, currency)
-        {mid_usd, _, _} = ExchangeRate.convert_to_usd(mid, currency)
-        {high_usd, l_rate, l_rate_date} = ExchangeRate.convert_to_usd(high, currency)
+        {low_usd, low_rate, low_rate_date} = ExchangeRate.convert_to_usd(low, currency)
+        {mid_usd, mid_rate, mid_rate_date} = ExchangeRate.convert_to_usd(mid, currency)
+        {high_usd, high_rate, high_rate_date} = ExchangeRate.convert_to_usd(high, currency)
+
+        # Use rate from first non-nil price (prefer high → mid → low)
+        {l_rate, l_rate_date} =
+          cond do
+            high -> {high_rate, high_rate_date}
+            mid -> {mid_rate, mid_rate_date}
+            low -> {low_rate, low_rate_date}
+            true -> {nil, nil}
+          end
 
         listing =
           if low || mid || high do
@@ -365,7 +374,7 @@ defmodule Pokevestment.Ingestion.Transformer do
 
     {holo_sold, holo_listing} =
       if Enum.any?(holo_values, fn val -> is_number(val) and val > 0 end) do
-        holo_base = %{base | variant: "holo"}
+        holo_base = %{base | variant: "reverse-holofoil"}
         holo_avg = to_decimal(cardmarket["avg-holo"])
         {h_usd, h_rate, h_rate_date} = ExchangeRate.convert_to_usd(holo_avg, currency)
 
