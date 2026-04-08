@@ -42,6 +42,8 @@ config :pokevestment, Oban,
      crontab: [
        # Daily price sync at 6 AM UTC
        {"0 6 * * *", Pokevestment.Workers.DailyPriceSync, queue: :ingestion},
+       # Card detail backfill at 6:30 AM UTC (fills gaps from minimal imports)
+       {"30 6 * * *", Pokevestment.Workers.CardDetailBackfill, queue: :ingestion},
        # Daily data quality check at 7 AM UTC (after prices, before tournaments)
        {"0 7 * * *", Pokevestment.Workers.DataQualityCheck},
        # Daily tournament sync at 8 AM UTC

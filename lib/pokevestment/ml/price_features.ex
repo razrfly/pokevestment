@@ -1,16 +1,19 @@
 defmodule Pokevestment.ML.PriceFeatures do
   @moduledoc """
-  Computes price-derived features for each card from price snapshots.
+  Computes price-derived features for each card from sold_prices only.
   Returns %{card_id => %{feature_name => value}} using the latest snapshot date
-  with variant priority ordering (cardmarket/normal preferred).
+  with variant priority ordering (tcgplayer/normal preferred).
+
+  Sold prices only — listing data is never used for ML targets.
+  All prices normalized to USD via price_usd column.
   """
 
   alias Pokevestment.Repo
 
   @doc """
   Computes price features using DISTINCT ON with variant priority.
-  TCGPlayer is preferred over CardMarket. Uses COALESCE(price_market, price_avg)
-  as the canonical price to handle both sources correctly.
+  TCGPlayer is preferred over CardMarket. Uses price_usd as the
+  canonical price — all prices in USD regardless of source.
   Returns %{card_id => %{feature_name => value}}.
   """
   def compute_all do
@@ -20,53 +23,34 @@ defmodule Pokevestment.ML.PriceFeatures do
 
   defp query do
     """
-    SELECT DISTINCT ON (ps.card_id)
-      ps.card_id,
-      ps.source,
-      ps.currency,
-      COALESCE(
-        CASE
-          WHEN ps.price_market IS NOT NULL
-            AND (ps.price_low IS NULL OR ps.price_market >= ps.price_low * 0.5)
-          THEN ps.price_market
-        END,
-        ps.price_mid,
-        ps.price_avg
-      )::float AS canonical_price,
-      ps.price_low::float,
-      ps.price_high::float,
-      ps.price_mid::float,
-      ps.price_market::float,
-      ps.price_avg::float,
-      ps.price_trend::float,
-      ps.price_avg1::float,
-      ps.price_avg7::float,
-      ps.price_avg30::float
-    FROM price_snapshots ps
-    JOIN cards c ON c.id = ps.card_id
-    WHERE COALESCE(ps.price_market, ps.price_mid, ps.price_avg) IS NOT NULL
-      AND COALESCE(ps.price_market, ps.price_mid, ps.price_avg) > 0
+    SELECT DISTINCT ON (sp.card_id)
+      sp.card_id,
+      sp.marketplace AS source,
+      sp.currency_original AS currency,
+      sp.price_usd::float AS canonical_price,
+      sp.price_avg_1d::float,
+      sp.price_avg_7d::float,
+      sp.price_avg_30d::float
+    FROM sold_prices sp
+    JOIN cards c ON c.id = sp.card_id
+    WHERE sp.price_usd IS NOT NULL AND sp.price_usd > 0
       AND (
         c.variants IS NULL
-        OR (ps.variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
-        OR (ps.variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
-        OR (ps.variant = 'holo' AND (c.variants->>'holo')::boolean IS NOT FALSE)
-        OR (ps.variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
-        OR ps.variant NOT IN ('normal', 'holofoil', 'holo', 'reverse-holofoil')
+        OR (sp.variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
+        OR (sp.variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+        OR (sp.variant = 'holo' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+        OR (sp.variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
+        OR sp.variant NOT IN ('normal', 'holofoil', 'holo', 'reverse-holofoil')
       )
-    ORDER BY ps.card_id, ps.snapshot_date DESC,
+    ORDER BY sp.card_id, sp.snapshot_date DESC,
       CASE
-        WHEN ps.source = 'tcgplayer' AND ps.variant = 'normal' THEN 1
-        WHEN ps.source = 'tcgplayer' AND ps.variant = 'holofoil' THEN 2
-        WHEN ps.source = 'tcgplayer' AND ps.variant = 'reverse-holofoil' THEN 3
-        WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition-holofoil' THEN 4
-        WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition-normal' THEN 5
-        WHEN ps.source = 'tcgplayer' AND ps.variant = 'unlimited' THEN 5
-        WHEN ps.source = 'tcgplayer' AND ps.variant = 'unlimited-holofoil' THEN 5
-        WHEN ps.source = 'tcgplayer' AND ps.variant = '1st-edition' THEN 5
-        WHEN ps.source = 'cardmarket' AND ps.variant = 'normal' THEN 6
-        WHEN ps.source = 'cardmarket' AND ps.variant = 'holo' THEN 7
-        ELSE 8
+        WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' THEN 1
+        WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' THEN 2
+        WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 3
+        WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 4
+        WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'holo' THEN 5
+        WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 6
+        ELSE 7
       END
     """
   end
@@ -86,30 +70,24 @@ defmodule Pokevestment.ML.PriceFeatures do
 
   defp compute_derived(base) do
     canonical = base["canonical_price"]
-    avg1 = base["price_avg1"]
-    avg7 = base["price_avg7"]
-    avg30 = base["price_avg30"]
-    high = base["price_high"]
-    low = base["price_low"]
+    avg1 = base["price_avg_1d"]
+    avg7 = base["price_avg_7d"]
+    avg30 = base["price_avg_30d"]
 
     %{
       "price_momentum_7d" => momentum(avg1, avg7),
       "price_momentum_30d" => momentum(avg1, avg30),
-      "price_volatility" => compute_volatility(high, low, canonical),
+      "price_volatility" => compute_volatility(avg1, avg30),
       "log_price" => safe_log(canonical)
     }
   end
 
-  # Volatility uses canonical_price (sanitized COALESCE) as denominator
-  defp compute_volatility(high, low, canonical)
-       when is_number(high) and is_number(low) and is_number(canonical) and canonical > 0,
-       do: max(high - low, 0) / canonical
+  # Volatility computed from sold price time-window spread
+  defp compute_volatility(avg1, avg30)
+       when is_number(avg1) and is_number(avg30) and avg30 > 0,
+       do: abs(avg1 - avg30) / avg30
 
-  defp compute_volatility(_high, low, canonical)
-       when is_number(low) and is_number(canonical) and canonical > 0,
-       do: max(canonical - low, 0) / canonical
-
-  defp compute_volatility(_, _, _), do: nil
+  defp compute_volatility(_, _), do: nil
 
   defp momentum(_current, nil), do: nil
   defp momentum(nil, _old), do: nil

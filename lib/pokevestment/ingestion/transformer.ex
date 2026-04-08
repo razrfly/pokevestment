@@ -5,6 +5,7 @@ defmodule Pokevestment.Ingestion.Transformer do
   """
 
   alias Pokevestment.Ingestion.FeatureExtractor
+  alias Pokevestment.Pricing.ExchangeRate
 
   @generation_ranges [
     {1, 1, 151},
@@ -108,7 +109,7 @@ defmodule Pokevestment.Ingestion.Transformer do
   @doc """
   Transform a raw TCGdex card detail response into a tuple of attribute maps.
 
-  Returns `{card_attrs, [card_type_attrs], [card_dex_id_attrs], [price_snapshot_attrs]}`.
+  Returns `{card_attrs, [card_type_attrs], [card_dex_id_attrs], [sold_price_attrs], [listing_price_attrs]}`.
 
   `set_data` should be a map with `:card_count_official` for secret rare derivation.
   """
@@ -174,9 +175,9 @@ defmodule Pokevestment.Ingestion.Transformer do
     card_dex_id_attrs =
       dex_ids |> Enum.uniq() |> Enum.map(fn dex_id -> %{card_id: card_id, dex_id: dex_id} end)
 
-    price_snapshot_attrs = build_price_snapshots(card_id, card_raw["pricing"])
+    {sold_prices, listing_prices} = build_prices(card_id, card_raw["pricing"], "tcgdex")
 
-    {card, card_type_attrs, card_dex_id_attrs, price_snapshot_attrs}
+    {card, card_type_attrs, card_dex_id_attrs, sold_prices, listing_prices}
   end
 
   @doc """
@@ -198,76 +199,161 @@ defmodule Pokevestment.Ingestion.Transformer do
       image_url: build_image_url(image_base)
     }
 
-    {card, [], [], []}
+    {card, [], [], [], []}
   end
 
-  # --- Price Snapshot Builders ---
+  # --- Price Builders (Sold / Listing separation) ---
 
-  @doc "Build price snapshot attr maps from a card's pricing data. Returns [] if nil."
-  def build_price_snapshots(_card_id, nil), do: []
+  @doc """
+  Build sold and listing price attrs from a card's TCGdex pricing data.
 
-  def build_price_snapshots(card_id, pricing) do
+  Returns `{[sold_price_attrs], [listing_price_attrs]}`.
+  """
+  def build_prices(_card_id, nil, _api_source), do: {[], []}
+
+  def build_prices(card_id, pricing, api_source) do
     today = Date.utc_today()
 
-    build_tcgplayer_snapshots(card_id, pricing["tcgplayer"], today) ++
-      build_cardmarket_snapshots(card_id, pricing["cardmarket"], today)
+    {tcg_sold, tcg_listing} =
+      build_tcgdex_tcgplayer_prices(card_id, pricing["tcgplayer"], today, api_source)
+
+    {cm_sold, cm_listing} =
+      build_tcgdex_cardmarket_prices(card_id, pricing["cardmarket"], today, api_source)
+
+    {tcg_sold ++ cm_sold, tcg_listing ++ cm_listing}
   end
 
-  defp build_tcgplayer_snapshots(_card_id, nil, _today), do: []
+  defp build_tcgdex_tcgplayer_prices(_card_id, nil, _today, _api_source), do: {[], []}
 
-  defp build_tcgplayer_snapshots(card_id, tcgplayer, today) do
+  defp build_tcgdex_tcgplayer_prices(card_id, tcgplayer, today, api_source) do
     source_updated_at = parse_datetime(tcgplayer["updated"])
     currency = tcgplayer["unit"] || "USD"
 
     tcgplayer
     |> Map.drop(~w(updated unit))
-    |> Enum.flat_map(fn
-      {variant, data} when is_map(data) ->
-        [
-          %{
-            card_id: card_id,
-            source: "tcgplayer",
-            variant: normalize_variant(variant),
-            snapshot_date: today,
-            currency: currency,
-            price_low: to_decimal(data["lowPrice"]),
-            price_mid: to_decimal(data["midPrice"]),
-            price_high: to_decimal(data["highPrice"]),
-            price_market: to_decimal(data["marketPrice"]),
-            price_direct_low: to_decimal(data["directLowPrice"]),
-            product_id: data["productId"],
-            source_updated_at: source_updated_at
-          }
-        ]
+    |> Enum.reduce({[], []}, fn
+      {variant, data}, {sold_acc, listing_acc} when is_map(data) ->
+        normalized_variant = normalize_variant(variant)
+        market_price = to_decimal(data["marketPrice"])
+        {price_usd, rate, rate_date} = ExchangeRate.convert_to_usd(market_price, currency)
 
-      {_key, _non_map} ->
-        []
+        base = %{
+          card_id: card_id,
+          marketplace: "tcgplayer",
+          api_source: api_source,
+          variant: normalized_variant,
+          snapshot_date: today,
+          currency_original: currency,
+          product_id: data["productId"],
+          source_updated_at: source_updated_at
+        }
+
+        sold =
+          if market_price do
+            [
+              Map.merge(base, %{
+                price: market_price,
+                price_usd: price_usd,
+                exchange_rate: rate,
+                exchange_rate_date: rate_date
+              })
+            ]
+          else
+            []
+          end
+
+        low = to_decimal(data["lowPrice"])
+        mid = to_decimal(data["midPrice"])
+        high = to_decimal(data["highPrice"])
+        direct_low = to_decimal(data["directLowPrice"])
+        {low_usd, _, _} = ExchangeRate.convert_to_usd(low, currency)
+        {mid_usd, _, _} = ExchangeRate.convert_to_usd(mid, currency)
+        {high_usd, l_rate, l_rate_date} = ExchangeRate.convert_to_usd(high, currency)
+
+        listing =
+          if low || mid || high do
+            [
+              Map.merge(base, %{
+                price_low: low,
+                price_mid: mid,
+                price_high: high,
+                price_direct_low: direct_low,
+                price_low_usd: low_usd,
+                price_mid_usd: mid_usd,
+                price_high_usd: high_usd,
+                exchange_rate: l_rate,
+                exchange_rate_date: l_rate_date
+              })
+            ]
+          else
+            []
+          end
+
+        {sold ++ sold_acc, listing ++ listing_acc}
+
+      _, acc ->
+        acc
     end)
   end
 
-  defp build_cardmarket_snapshots(_card_id, nil, _today), do: []
+  defp build_tcgdex_cardmarket_prices(_card_id, nil, _today, _api_source), do: {[], []}
 
-  defp build_cardmarket_snapshots(card_id, cardmarket, today) do
+  defp build_tcgdex_cardmarket_prices(card_id, cardmarket, today, api_source) do
     source_updated_at = parse_datetime(cardmarket["updated"])
     currency = cardmarket["unit"] || "EUR"
     product_id = cardmarket["idProduct"]
 
+    avg = to_decimal(cardmarket["avg"])
+    {price_usd, rate, rate_date} = ExchangeRate.convert_to_usd(avg, currency)
+
     base = %{
       card_id: card_id,
-      source: "cardmarket",
+      marketplace: "cardmarket",
+      api_source: api_source,
       variant: "normal",
       snapshot_date: today,
-      currency: currency,
-      price_low: to_decimal(cardmarket["low"]),
-      price_avg: to_decimal(cardmarket["avg"]),
-      price_trend: to_decimal(cardmarket["trend"]),
-      price_avg1: to_decimal(cardmarket["avg1"]),
-      price_avg7: to_decimal(cardmarket["avg7"]),
-      price_avg30: to_decimal(cardmarket["avg30"]),
+      currency_original: currency,
       product_id: product_id,
       source_updated_at: source_updated_at
     }
 
+    normal_sold =
+      if avg do
+        [
+          Map.merge(base, %{
+            price: avg,
+            price_avg_1d: to_decimal(cardmarket["avg1"]),
+            price_avg_7d: to_decimal(cardmarket["avg7"]),
+            price_avg_30d: to_decimal(cardmarket["avg30"]),
+            price_usd: price_usd,
+            exchange_rate: rate,
+            exchange_rate_date: rate_date
+          })
+        ]
+      else
+        []
+      end
+
+    low = to_decimal(cardmarket["low"])
+    trend = to_decimal(cardmarket["trend"])
+    {low_usd, l_rate, l_rate_date} = ExchangeRate.convert_to_usd(low, currency)
+
+    normal_listing =
+      if low do
+        [
+          Map.merge(base, %{
+            price_low: low,
+            price_low_usd: low_usd,
+            exchange_rate: l_rate,
+            exchange_rate_date: l_rate_date,
+            metadata: if(trend, do: %{"trend_price" => Decimal.to_string(trend)})
+          })
+        ]
+      else
+        []
+      end
+
+    # Holo variant
     holo_values = [
       cardmarket["avg-holo"],
       cardmarket["low-holo"],
@@ -277,105 +363,222 @@ defmodule Pokevestment.Ingestion.Transformer do
       cardmarket["avg30-holo"]
     ]
 
-    if Enum.any?(holo_values, fn val -> is_number(val) and val > 0 end) do
-      holo = %{
-        card_id: card_id,
-        source: "cardmarket",
-        variant: "holo",
-        snapshot_date: today,
-        currency: currency,
-        price_low: to_decimal(cardmarket["low-holo"]),
-        price_avg: to_decimal(cardmarket["avg-holo"]),
-        price_trend: to_decimal(cardmarket["trend-holo"]),
-        price_avg1: to_decimal(cardmarket["avg1-holo"]),
-        price_avg7: to_decimal(cardmarket["avg7-holo"]),
-        price_avg30: to_decimal(cardmarket["avg30-holo"]),
-        product_id: product_id,
-        source_updated_at: source_updated_at
-      }
+    {holo_sold, holo_listing} =
+      if Enum.any?(holo_values, fn val -> is_number(val) and val > 0 end) do
+        holo_base = %{base | variant: "holo"}
+        holo_avg = to_decimal(cardmarket["avg-holo"])
+        {h_usd, h_rate, h_rate_date} = ExchangeRate.convert_to_usd(holo_avg, currency)
 
-      [base, holo]
-    else
-      [base]
-    end
+        h_sold =
+          if holo_avg do
+            [
+              Map.merge(holo_base, %{
+                price: holo_avg,
+                price_avg_1d: to_decimal(cardmarket["avg1-holo"]),
+                price_avg_7d: to_decimal(cardmarket["avg7-holo"]),
+                price_avg_30d: to_decimal(cardmarket["avg30-holo"]),
+                price_usd: h_usd,
+                exchange_rate: h_rate,
+                exchange_rate_date: h_rate_date
+              })
+            ]
+          else
+            []
+          end
+
+        holo_low = to_decimal(cardmarket["low-holo"])
+        holo_trend = to_decimal(cardmarket["trend-holo"])
+        {hl_usd, hl_rate, hl_rate_date} = ExchangeRate.convert_to_usd(holo_low, currency)
+
+        h_listing =
+          if holo_low do
+            [
+              Map.merge(holo_base, %{
+                price_low: holo_low,
+                price_low_usd: hl_usd,
+                exchange_rate: hl_rate,
+                exchange_rate_date: hl_rate_date,
+                metadata: if(holo_trend, do: %{"trend_price" => Decimal.to_string(holo_trend)})
+              })
+            ]
+          else
+            []
+          end
+
+        {h_sold, h_listing}
+      else
+        {[], []}
+      end
+
+    {normal_sold ++ holo_sold, normal_listing ++ holo_listing}
   end
 
-  # --- Pokemon TCG API Price Snapshot Builders ---
+  # --- Pokemon TCG API Price Builders ---
 
   @doc """
-  Build price snapshot attr maps from Pokemon TCG API card data.
+  Build sold and listing price attrs from Pokemon TCG API card data.
 
-  Pokemon TCG API uses slightly different field names than TCGdex:
-  - TCGPlayer: `low`, `mid`, `high`, `market`, `directLow` (vs TCGdex: `lowPrice`, etc.)
-  - CardMarket: `averageSellPrice`, `lowPrice`, `trendPrice`, `avg1`, `avg7`, `avg30`
+  Returns `{[sold_price_attrs], [listing_price_attrs]}`.
   """
-  def build_price_snapshots_from_ptcg(_card_id, nil, nil), do: []
+  def build_prices_from_ptcg(_card_id, nil, nil), do: {[], []}
 
-  def build_price_snapshots_from_ptcg(card_id, tcgplayer, cardmarket) do
+  def build_prices_from_ptcg(card_id, tcgplayer, cardmarket) do
     today = Date.utc_today()
+    api_source = "pokemontcg.io"
 
-    build_ptcg_tcgplayer_snapshots(card_id, tcgplayer, today) ++
-      build_ptcg_cardmarket_snapshots(card_id, cardmarket, today)
+    {tcg_sold, tcg_listing} =
+      build_ptcg_tcgplayer_prices(card_id, tcgplayer, today, api_source)
+
+    {cm_sold, cm_listing} =
+      build_ptcg_cardmarket_prices(card_id, cardmarket, today, api_source)
+
+    {tcg_sold ++ cm_sold, tcg_listing ++ cm_listing}
   end
 
-  defp build_ptcg_tcgplayer_snapshots(_card_id, nil, _today), do: []
+  defp build_ptcg_tcgplayer_prices(_card_id, nil, _today, _api_source), do: {[], []}
 
-  defp build_ptcg_tcgplayer_snapshots(card_id, tcgplayer, today) do
+  defp build_ptcg_tcgplayer_prices(card_id, tcgplayer, today, api_source) do
     source_updated_at = parse_datetime(tcgplayer["updatedAt"])
     product_id = extract_product_id_from_url(tcgplayer["url"])
     marketplace_url = tcgplayer["url"]
     prices = tcgplayer["prices"] || %{}
 
-    Enum.flat_map(prices, fn
-      {variant, data} when is_map(data) ->
-        [
-          %{
-            card_id: card_id,
-            source: "tcgplayer",
-            variant: normalize_variant(variant),
-            snapshot_date: today,
-            currency: "USD",
-            price_low: to_decimal(data["low"]),
-            price_mid: to_decimal(data["mid"]),
-            price_high: to_decimal(data["high"]),
-            price_market: to_decimal(data["market"]),
-            price_direct_low: to_decimal(data["directLow"]),
-            product_id: product_id,
-            metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url}),
-            source_updated_at: source_updated_at
-          }
-        ]
+    Enum.reduce(prices, {[], []}, fn
+      {variant, data}, {sold_acc, listing_acc} when is_map(data) ->
+        normalized_variant = normalize_variant(variant)
+        market_price = to_decimal(data["market"])
+        {price_usd, rate, rate_date} = ExchangeRate.convert_to_usd(market_price, "USD")
 
-      _ ->
-        []
+        base = %{
+          card_id: card_id,
+          marketplace: "tcgplayer",
+          api_source: api_source,
+          variant: normalized_variant,
+          snapshot_date: today,
+          currency_original: "USD",
+          product_id: product_id,
+          source_updated_at: source_updated_at,
+          metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url})
+        }
+
+        sold =
+          if market_price do
+            [
+              Map.merge(base, %{
+                price: market_price,
+                price_usd: price_usd,
+                exchange_rate: rate,
+                exchange_rate_date: rate_date
+              })
+            ]
+          else
+            []
+          end
+
+        low = to_decimal(data["low"])
+        mid = to_decimal(data["mid"])
+        high = to_decimal(data["high"])
+        direct_low = to_decimal(data["directLow"])
+
+        listing =
+          if low || mid || high do
+            [
+              Map.merge(base, %{
+                price_low: low,
+                price_mid: mid,
+                price_high: high,
+                price_direct_low: direct_low,
+                price_low_usd: low,
+                price_mid_usd: mid,
+                price_high_usd: high,
+                exchange_rate: Decimal.new(1),
+                exchange_rate_date: Date.utc_today()
+              })
+            ]
+          else
+            []
+          end
+
+        {sold ++ sold_acc, listing ++ listing_acc}
+
+      _, acc ->
+        acc
     end)
   end
 
-  defp build_ptcg_cardmarket_snapshots(_card_id, nil, _today), do: []
+  defp build_ptcg_cardmarket_prices(_card_id, nil, _today, _api_source), do: {[], []}
 
-  defp build_ptcg_cardmarket_snapshots(card_id, cardmarket, today) do
+  defp build_ptcg_cardmarket_prices(card_id, cardmarket, today, api_source) do
     source_updated_at = parse_datetime(cardmarket["updatedAt"])
     product_id = extract_product_id_from_url(cardmarket["url"])
     marketplace_url = cardmarket["url"]
     prices = cardmarket["prices"] || %{}
 
+    avg = to_decimal(prices["averageSellPrice"])
+    {price_usd, rate, rate_date} = ExchangeRate.convert_to_usd(avg, "EUR")
+
     base = %{
       card_id: card_id,
-      source: "cardmarket",
+      marketplace: "cardmarket",
+      api_source: api_source,
       variant: "normal",
       snapshot_date: today,
-      currency: "EUR",
-      price_low: to_decimal(prices["lowPrice"]),
-      price_avg: to_decimal(prices["averageSellPrice"]),
-      price_trend: to_decimal(prices["trendPrice"]),
-      price_avg1: to_decimal(prices["avg1"]),
-      price_avg7: to_decimal(prices["avg7"]),
-      price_avg30: to_decimal(prices["avg30"]),
+      currency_original: "EUR",
       product_id: product_id,
-      metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url}),
-      source_updated_at: source_updated_at
+      source_updated_at: source_updated_at,
+      metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url})
     }
 
+    normal_sold =
+      if avg do
+        [
+          Map.merge(base, %{
+            price: avg,
+            price_avg_1d: to_decimal(prices["avg1"]),
+            price_avg_7d: to_decimal(prices["avg7"]),
+            price_avg_30d: to_decimal(prices["avg30"]),
+            price_usd: price_usd,
+            exchange_rate: rate,
+            exchange_rate_date: rate_date
+          })
+        ]
+      else
+        []
+      end
+
+    low = to_decimal(prices["lowPrice"])
+    trend = to_decimal(prices["trendPrice"])
+    {low_usd, l_rate, l_rate_date} = ExchangeRate.convert_to_usd(low, "EUR")
+
+    normal_listing =
+      if low do
+        trend_meta =
+          if trend,
+            do: %{"trend_price" => Decimal.to_string(trend)},
+            else: nil
+
+        listing_meta =
+          case {marketplace_url, trend_meta} do
+            {nil, nil} -> nil
+            {url, nil} -> %{"marketplace_url" => url}
+            {nil, tm} -> tm
+            {url, tm} -> Map.put(tm, "marketplace_url", url)
+          end
+
+        [
+          Map.merge(base, %{
+            price_low: low,
+            price_low_usd: low_usd,
+            exchange_rate: l_rate,
+            exchange_rate_date: l_rate_date,
+            metadata: listing_meta
+          })
+        ]
+      else
+        []
+      end
+
+    # Reverse holo variant
     holo_values = [
       prices["reverseHoloAvg1"],
       prices["reverseHoloAvg7"],
@@ -385,28 +588,67 @@ defmodule Pokevestment.Ingestion.Transformer do
       prices["reverseHoloSell"]
     ]
 
-    if Enum.any?(holo_values, fn val -> is_number(val) and val > 0 end) do
-      holo = %{
-        card_id: card_id,
-        source: "cardmarket",
-        variant: "holo",
-        snapshot_date: today,
-        currency: "EUR",
-        price_low: to_decimal(prices["reverseHoloLow"]),
-        price_avg: to_decimal(prices["reverseHoloSell"]),
-        price_trend: to_decimal(prices["reverseHoloTrend"]),
-        price_avg1: to_decimal(prices["reverseHoloAvg1"]),
-        price_avg7: to_decimal(prices["reverseHoloAvg7"]),
-        price_avg30: to_decimal(prices["reverseHoloAvg30"]),
-        product_id: product_id,
-        metadata: if(marketplace_url, do: %{"marketplace_url" => marketplace_url}),
-        source_updated_at: source_updated_at
-      }
+    {holo_sold, holo_listing} =
+      if Enum.any?(holo_values, fn val -> is_number(val) and val > 0 end) do
+        holo_base = %{base | variant: "reverse-holofoil"}
+        holo_avg = to_decimal(prices["reverseHoloSell"])
+        {h_usd, h_rate, h_rate_date} = ExchangeRate.convert_to_usd(holo_avg, "EUR")
 
-      [base, holo]
-    else
-      [base]
-    end
+        h_sold =
+          if holo_avg do
+            [
+              Map.merge(holo_base, %{
+                price: holo_avg,
+                price_avg_1d: to_decimal(prices["reverseHoloAvg1"]),
+                price_avg_7d: to_decimal(prices["reverseHoloAvg7"]),
+                price_avg_30d: to_decimal(prices["reverseHoloAvg30"]),
+                price_usd: h_usd,
+                exchange_rate: h_rate,
+                exchange_rate_date: h_rate_date
+              })
+            ]
+          else
+            []
+          end
+
+        holo_low = to_decimal(prices["reverseHoloLow"])
+        holo_trend = to_decimal(prices["reverseHoloTrend"])
+        {hl_usd, hl_rate, hl_rate_date} = ExchangeRate.convert_to_usd(holo_low, "EUR")
+
+        h_listing =
+          if holo_low do
+            h_trend_meta =
+              if holo_trend,
+                do: %{"trend_price" => Decimal.to_string(holo_trend)},
+                else: nil
+
+            h_listing_meta =
+              case {marketplace_url, h_trend_meta} do
+                {nil, nil} -> nil
+                {url, nil} -> %{"marketplace_url" => url}
+                {nil, tm} -> tm
+                {url, tm} -> Map.put(tm, "marketplace_url", url)
+              end
+
+            [
+              Map.merge(holo_base, %{
+                price_low: holo_low,
+                price_low_usd: hl_usd,
+                exchange_rate: hl_rate,
+                exchange_rate_date: hl_rate_date,
+                metadata: h_listing_meta
+              })
+            ]
+          else
+            []
+          end
+
+        {h_sold, h_listing}
+      else
+        {[], []}
+      end
+
+    {normal_sold ++ holo_sold, normal_listing ++ holo_listing}
   end
 
   # --- Public Helpers ---

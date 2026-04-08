@@ -9,7 +9,7 @@ defmodule Pokevestment.ML.Accountability do
 
   alias Pokevestment.Repo
   alias Pokevestment.ML.{PredictionOutcome, PredictionSnapshot, ModelEvaluation}
-  alias Pokevestment.Pricing.PriceSnapshot
+  alias Pokevestment.Pricing.SoldPrice
 
   @doc """
   Signal accuracy breakdown by signal type.
@@ -181,8 +181,8 @@ defmodule Pokevestment.ML.Accountability do
   """
   def price_history_range do
     result =
-      from(ps in PriceSnapshot,
-        select: %{earliest: min(ps.snapshot_date), latest: max(ps.snapshot_date)}
+      from(sp in SoldPrice,
+        select: %{earliest: min(sp.snapshot_date), latest: max(sp.snapshot_date)}
       )
       |> Repo.one()
 

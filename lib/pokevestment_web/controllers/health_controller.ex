@@ -55,7 +55,7 @@ defmodule PokevestmentWeb.HealthController do
   end
 
   defp check_price_freshness do
-    query = from(ps in "price_snapshots", select: max(ps.snapshot_date))
+    query = from(sp in "sold_prices", select: max(sp.snapshot_date))
 
     case Pokevestment.Repo.one(query) do
       nil ->

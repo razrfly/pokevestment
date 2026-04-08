@@ -18,7 +18,7 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
 
   alias Pokevestment.Repo
   alias Pokevestment.ML.{PredictionOutcome, PredictionSnapshot}
-  alias Pokevestment.Pricing.PriceSnapshot
+  alias Pokevestment.Pricing.SoldPrice
 
   @batch_limit 10_000
   @lookback_days 7
@@ -125,26 +125,25 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
       latest = Enum.max(outcome_dates, Date)
       lookback_start = Date.add(earliest, -@lookback_days)
 
-      # Query all relevant price snapshots in one go
+      # Query sold_prices only — use price_usd for consistent currency
       # Variant priority matches price_features.ex exactly
       rows =
-        from(ps in PriceSnapshot,
-          where: ps.card_id in ^card_ids,
-          where: ps.snapshot_date >= ^lookback_start,
-          where: ps.snapshot_date <= ^latest,
-          where: not is_nil(coalesce(ps.price_market, coalesce(ps.price_mid, ps.price_avg))),
-          where: coalesce(ps.price_market, coalesce(ps.price_mid, ps.price_avg)) > 0,
+        from(sp in SoldPrice,
+          where: sp.card_id in ^card_ids,
+          where: sp.snapshot_date >= ^lookback_start,
+          where: sp.snapshot_date <= ^latest,
+          where: not is_nil(sp.price_usd) and sp.price_usd > 0,
           select: %{
-            card_id: ps.card_id,
-            snapshot_date: ps.snapshot_date,
-            price: coalesce(ps.price_market, coalesce(ps.price_mid, ps.price_avg)),
-            source: ps.source,
-            currency: ps.currency,
-            variant: ps.variant
+            card_id: sp.card_id,
+            snapshot_date: sp.snapshot_date,
+            price: sp.price_usd,
+            source: sp.marketplace,
+            currency: "USD",
+            variant: sp.variant
           },
           order_by: [
-            asc: ps.card_id,
-            desc: ps.snapshot_date,
+            asc: sp.card_id,
+            desc: sp.snapshot_date,
             asc:
               fragment(
                 """
@@ -152,27 +151,21 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
                   WHEN ? = 'tcgplayer' AND ? = 'normal' THEN 1
                   WHEN ? = 'tcgplayer' AND ? = 'holofoil' THEN 2
                   WHEN ? = 'tcgplayer' AND ? = 'reverse-holofoil' THEN 3
-                  WHEN ? = 'tcgplayer' AND ? = '1st-edition-holofoil' THEN 4
-                  WHEN ? = 'tcgplayer' AND ? IN ('1st-edition-normal', 'unlimited', 'unlimited-holofoil', '1st-edition') THEN 5
-                  WHEN ? = 'cardmarket' AND ? = 'normal' THEN 6
-                  WHEN ? = 'cardmarket' AND ? = 'holo' THEN 7
-                  ELSE 8
+                  WHEN ? = 'cardmarket' AND ? = 'normal' THEN 4
+                  WHEN ? = 'cardmarket' AND ? = 'holo' THEN 5
+                  ELSE 6
                 END
                 """,
-                ps.source,
-                ps.variant,
-                ps.source,
-                ps.variant,
-                ps.source,
-                ps.variant,
-                ps.source,
-                ps.variant,
-                ps.source,
-                ps.variant,
-                ps.source,
-                ps.variant,
-                ps.source,
-                ps.variant
+                sp.marketplace,
+                sp.variant,
+                sp.marketplace,
+                sp.variant,
+                sp.marketplace,
+                sp.variant,
+                sp.marketplace,
+                sp.variant,
+                sp.marketplace,
+                sp.variant
               )
           ]
         )

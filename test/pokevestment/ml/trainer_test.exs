@@ -4,7 +4,7 @@ defmodule Pokevestment.ML.TrainerTest do
   alias Pokevestment.Repo
   alias Pokevestment.Cards.{Series, Set, Card, CardType, CardDexId}
   alias Pokevestment.Pokemon.Species
-  alias Pokevestment.Pricing.PriceSnapshot
+  alias Pokevestment.Pricing.SoldPrice
   alias Pokevestment.Tournaments.{Tournament, TournamentStanding, TournamentDeckCard}
   alias Pokevestment.ML.{FeatureMatrix, Preprocessing, Trainer, Scorer, Pipeline}
   alias Pokevestment.ML.{CardPrediction, ModelEvaluation}
@@ -122,39 +122,41 @@ defmodule Pokevestment.ML.TrainerTest do
     Repo.insert!(%CardType{card_id: "sv06-040", type_name: "Fire"})
     Repo.insert!(%CardType{card_id: "sv06-040", type_name: "Dragon"})
 
-    # Price snapshots
+    # Sold prices
     today = Date.utc_today()
 
-    # TCGPlayer snapshots (should be preferred)
+    # TCGPlayer sold prices (should be preferred)
     for {card_id, market} <- [{"sv06-040", 90.0}, {"sv06-155", 5.00}, {"sv06-198", 0.20}] do
-      Repo.insert!(%PriceSnapshot{
+      Repo.insert!(%SoldPrice{
         card_id: card_id,
-        source: "tcgplayer",
+        marketplace: "tcgplayer",
+        api_source: "pokemontcg.io",
         variant: "holofoil",
-        currency: "USD",
+        currency_original: "USD",
         snapshot_date: today,
-        price_low: Decimal.from_float(market * 0.85),
-        price_mid: Decimal.from_float(market * 0.95),
-        price_high: Decimal.from_float(market * 1.2),
-        price_market: Decimal.from_float(market)
+        price: Decimal.from_float(market),
+        price_usd: Decimal.from_float(market)
       })
     end
 
-    # CardMarket snapshots (fallback)
+    # CardMarket sold prices (fallback)
     for {card_id, avg} <- [{"sv06-040", 45.0}, {"sv06-155", 2.50}, {"sv06-198", 0.10}] do
-      Repo.insert!(%PriceSnapshot{
+      usd = avg * 1.08
+
+      Repo.insert!(%SoldPrice{
         card_id: card_id,
-        source: "cardmarket",
+        marketplace: "cardmarket",
+        api_source: "tcgdex",
         variant: "normal",
-        currency: "EUR",
+        currency_original: "EUR",
         snapshot_date: today,
-        price_avg: Decimal.from_float(avg),
-        price_low: Decimal.from_float(avg * 0.8),
-        price_high: Decimal.from_float(avg * 1.3),
-        price_mid: Decimal.from_float(avg),
-        price_avg1: Decimal.from_float(avg * 1.02),
-        price_avg7: Decimal.from_float(avg * 0.95),
-        price_avg30: Decimal.from_float(avg * 0.90)
+        price: Decimal.from_float(avg),
+        price_usd: Decimal.from_float(usd),
+        price_avg_1d: Decimal.from_float(avg * 1.02),
+        price_avg_7d: Decimal.from_float(avg * 0.95),
+        price_avg_30d: Decimal.from_float(avg * 0.90),
+        exchange_rate: Decimal.from_float(1.08),
+        exchange_rate_date: today
       })
     end
 
