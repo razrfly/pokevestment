@@ -145,29 +145,21 @@ defmodule Pokevestment.ML.FeatureMatrix do
   end
 
   defp illustrator_stats do
-    # Frequency count per illustrator and average price (TCGPlayer-first)
+    # Frequency count per illustrator and average sold price (USD-normalized)
     %{rows: rows} =
       Repo.query!(
         """
         SELECT
           c.illustrator,
           COUNT(*) AS frequency,
-          AVG(ps.best_price::float) AS avg_price
+          AVG(sp.best_price::float) AS avg_price
         FROM cards c
         LEFT JOIN LATERAL (
-          SELECT COALESCE(
-            CASE
-              WHEN price_market IS NOT NULL
-                AND (price_low IS NULL OR price_market >= price_low * 0.5)
-              THEN price_market
-            END,
-            price_mid,
-            price_avg
-          ) AS best_price
-          FROM price_snapshots
+          SELECT price_usd AS best_price
+          FROM sold_prices
           WHERE card_id = c.id
-            AND COALESCE(price_market, price_mid, price_avg) IS NOT NULL
-            AND COALESCE(price_market, price_mid, price_avg) > 0
+            AND price_usd IS NOT NULL
+            AND price_usd > 0
             AND (
               c.variants IS NULL
               OR (variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
@@ -178,20 +170,16 @@ defmodule Pokevestment.ML.FeatureMatrix do
             )
           ORDER BY snapshot_date DESC,
             CASE
-              WHEN source = 'tcgplayer' AND variant = 'normal' THEN 1
-              WHEN source = 'tcgplayer' AND variant = 'holofoil' THEN 2
-              WHEN source = 'tcgplayer' AND variant = 'reverse-holofoil' THEN 3
-              WHEN source = 'tcgplayer' AND variant = '1st-edition-holofoil' THEN 4
-              WHEN source = 'tcgplayer' AND variant = '1st-edition-normal' THEN 5
-              WHEN source = 'tcgplayer' AND variant = 'unlimited' THEN 5
-              WHEN source = 'tcgplayer' AND variant = 'unlimited-holofoil' THEN 5
-              WHEN source = 'tcgplayer' AND variant = '1st-edition' THEN 5
-              WHEN source = 'cardmarket' AND variant = 'normal' THEN 6
-              WHEN source = 'cardmarket' AND variant = 'holo' THEN 7
-              ELSE 8
+              WHEN marketplace = 'tcgplayer' AND variant = 'normal' THEN 1
+              WHEN marketplace = 'tcgplayer' AND variant = 'holofoil' THEN 2
+              WHEN marketplace = 'tcgplayer' AND variant = 'reverse-holofoil' THEN 3
+              WHEN marketplace = 'cardmarket' AND variant = 'normal' THEN 4
+              WHEN marketplace = 'cardmarket' AND variant = 'holo' THEN 5
+              WHEN marketplace = 'cardmarket' AND variant = 'reverse-holofoil' THEN 6
+              ELSE 7
             END
           LIMIT 1
-        ) ps ON true
+        ) sp ON true
         WHERE c.illustrator IS NOT NULL
         GROUP BY c.illustrator
         """,
@@ -264,15 +252,9 @@ defmodule Pokevestment.ML.FeatureMatrix do
   defp merge_price(card, nil) do
     Map.merge(card, %{
       canonical_price: nil,
-      price_avg: nil,
-      price_low: nil,
-      price_high: nil,
-      price_mid: nil,
-      price_market: nil,
-      price_trend: nil,
-      price_avg1: nil,
-      price_avg7: nil,
-      price_avg30: nil,
+      price_avg_1d: nil,
+      price_avg_7d: nil,
+      price_avg_30d: nil,
       price_momentum_7d: nil,
       price_momentum_30d: nil,
       price_volatility: nil,

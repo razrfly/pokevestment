@@ -7,6 +7,9 @@ defmodule Pokevestment.Application do
 
   @impl true
   def start(_type, _args) do
+    # Initialize ETS table for exchange rate caching
+    Pokevestment.Pricing.ExchangeRate.init()
+
     children = [
       PokevestmentWeb.Telemetry,
       Pokevestment.Repo,

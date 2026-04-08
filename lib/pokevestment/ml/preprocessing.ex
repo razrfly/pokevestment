@@ -7,15 +7,14 @@ defmodule Pokevestment.ML.Preprocessing do
   require Explorer.DataFrame, as: DF
   alias Explorer.Series
 
-  @categorical_columns ~w(category rarity era energy_type stage art_type set_age_bucket growth_rate)
+  @categorical_columns ~w(category rarity era energy_type stage art_type set_age_bucket growth_rate price_currency)
   @boolean_columns ~w(has_ability is_full_art is_alternate_art is_secret_rare first_edition is_shadowless has_first_edition_stamp legal_standard legal_expanded is_legendary is_mythical is_baby has_evolution)
   # Drop identifier columns + raw price columns (target leakage — the model must
   # predict fair value from card fundamentals, not from the current price itself).
   # Derived features (momentum, volatility) are kept as valid trend signals.
   @drop_columns ~w(
-    card_id canonical_price price_source price_currency
-    price_low price_high price_mid price_market price_avg
-    price_trend price_avg1 price_avg7 price_avg30
+    card_id canonical_price price_source
+    price_avg_1d price_avg_7d price_avg_30d
   )
   @target_column "log_price"
 
@@ -189,6 +188,7 @@ defmodule Pokevestment.ML.Preprocessing do
       "price_momentum_7d" => "price_momentum",
       "price_momentum_30d" => "price_momentum",
       "price_volatility" => "price_momentum",
+      "price_currency" => "price_momentum",
       # Supply proxy
       "set_card_count" => "supply_proxy",
       "era" => "supply_proxy",

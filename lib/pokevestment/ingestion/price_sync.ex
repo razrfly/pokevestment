@@ -1,7 +1,8 @@
 defmodule Pokevestment.Ingestion.PriceSync do
   @moduledoc """
   Daily price sync orchestrator — fetches current prices for all cards via
-  the Pokemon TCG API (bulk per-set requests) and inserts new PriceSnapshot rows.
+  the Pokemon TCG API (bulk per-set requests) and inserts into sold_prices
+  and listing_prices tables.
 
   Idempotent: `on_conflict: :nothing` means re-running on the same day
   inserts 0 new rows.
@@ -14,7 +15,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
   alias Pokevestment.Repo
   alias Pokevestment.Api.PokemonTcg
   alias Pokevestment.Ingestion.{SetMapping, Transformer}
-  alias Pokevestment.Pricing.PriceSnapshot
+  alias Pokevestment.Pricing.{ExchangeRate, SoldPrice, ListingPrice}
 
   @doc """
   Run a full price sync for all cards using the Pokemon TCG API.
@@ -25,6 +26,15 @@ defmodule Pokevestment.Ingestion.PriceSync do
     start = System.monotonic_time(:millisecond)
     Logger.info("PriceSync: starting daily price sync via Pokemon TCG API...")
 
+    # Fetch exchange rate once for the entire run
+    case ExchangeRate.fetch_and_cache() do
+      {:ok, rate_info} ->
+        Logger.info("PriceSync: EUR/USD rate = #{rate_info.rate} (#{rate_info.date})")
+
+      {:error, reason} ->
+        Logger.warning("PriceSync: could not fetch exchange rate: #{inspect(reason)}, USD normalization will be nil for EUR prices")
+    end
+
     with {:ok, set_mapping} <- SetMapping.build() do
       our_card_ids = load_card_ids()
       total_sets = map_size(set_mapping)
@@ -32,7 +42,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
       counter = :counters.new(1, [:atomics])
 
-      {snapshots_inserted, failed_sets} =
+      {prices_inserted, failed_sets} =
         set_mapping
         |> Map.to_list()
         |> Task.async_stream(
@@ -73,7 +83,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
       Logger.info(
         "PriceSync: complete in #{format_duration(elapsed_ms)} — " <>
-          "#{processed}/#{total_sets} sets processed, #{snapshots_inserted} snapshots inserted, " <>
+          "#{processed}/#{total_sets} sets processed, #{prices_inserted} prices inserted, " <>
           "#{length(failed_sets)} failed"
       )
 
@@ -81,7 +91,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
        %{
          total: total_sets,
          processed: processed,
-         snapshots_inserted: snapshots_inserted,
+         prices_inserted: prices_inserted,
          failed: failed_sets,
          elapsed_ms: elapsed_ms
        }}
@@ -96,24 +106,28 @@ defmodule Pokevestment.Ingestion.PriceSync do
   defp sync_set(ptcg_set_id, our_set_id, our_card_ids) do
     case PokemonTcg.list_cards_for_set(ptcg_set_id) do
       {:ok, cards} ->
-        snapshots =
-          Enum.flat_map(cards, fn card ->
+        {all_sold, all_listing} =
+          Enum.reduce(cards, {[], []}, fn card, {sold_acc, listing_acc} ->
             number = card["number"] || ""
             card_id = resolve_card_id(our_set_id, number, our_card_ids)
 
             if card_id do
-              Transformer.build_price_snapshots_from_ptcg(
-                card_id,
-                card["tcgplayer"],
-                card["cardmarket"]
-              )
+              {sold, listing} =
+                Transformer.build_prices_from_ptcg(
+                  card_id,
+                  card["tcgplayer"],
+                  card["cardmarket"]
+                )
+
+              {sold ++ sold_acc, listing ++ listing_acc}
             else
-              []
+              {sold_acc, listing_acc}
             end
           end)
 
-        inserted = insert_snapshots(snapshots)
-        {:ok, inserted}
+        sold_count = insert_sold_prices(all_sold)
+        listing_count = insert_listing_prices(all_listing)
+        {:ok, sold_count + listing_count}
 
       {:error, reason} ->
         {:error, reason}
@@ -132,21 +146,21 @@ defmodule Pokevestment.Ingestion.PriceSync do
     end
   end
 
-  defp insert_snapshots([]), do: 0
+  defp insert_sold_prices([]), do: 0
 
-  defp insert_snapshots(snapshots) do
+  defp insert_sold_prices(prices) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     {valid_rows, invalid_count} =
-      Enum.reduce(snapshots, {[], 0}, fn attrs, {rows, bad} ->
-        changeset = PriceSnapshot.changeset(%PriceSnapshot{}, attrs)
+      Enum.reduce(prices, {[], 0}, fn attrs, {rows, bad} ->
+        changeset = SoldPrice.changeset(%SoldPrice{}, attrs)
 
         if changeset.valid? do
           row = Map.merge(attrs, %{inserted_at: now})
           {[row | rows], bad}
         else
           Logger.warning(
-            "PriceSync: dropping invalid snapshot for card #{attrs[:card_id]}: " <>
+            "PriceSync: dropping invalid sold price for card #{attrs[:card_id]}: " <>
               "#{inspect(changeset.errors)}"
           )
 
@@ -155,7 +169,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
       end)
 
     if invalid_count > 0 do
-      Logger.warning("PriceSync: skipped #{invalid_count} invalid snapshots in batch")
+      Logger.warning("PriceSync: skipped #{invalid_count} invalid sold prices in batch")
     end
 
     case valid_rows do
@@ -164,9 +178,50 @@ defmodule Pokevestment.Ingestion.PriceSync do
 
       rows ->
         {count, _} =
-          Repo.insert_all(PriceSnapshot, Enum.reverse(rows),
+          Repo.insert_all(SoldPrice, Enum.reverse(rows),
             on_conflict: :nothing,
-            conflict_target: [:card_id, :source, :variant, :snapshot_date]
+            conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+          )
+
+        count
+    end
+  end
+
+  defp insert_listing_prices([]), do: 0
+
+  defp insert_listing_prices(prices) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    {valid_rows, invalid_count} =
+      Enum.reduce(prices, {[], 0}, fn attrs, {rows, bad} ->
+        changeset = ListingPrice.changeset(%ListingPrice{}, attrs)
+
+        if changeset.valid? do
+          row = Map.merge(attrs, %{inserted_at: now})
+          {[row | rows], bad}
+        else
+          Logger.warning(
+            "PriceSync: dropping invalid listing price for card #{attrs[:card_id]}: " <>
+              "#{inspect(changeset.errors)}"
+          )
+
+          {rows, bad + 1}
+        end
+      end)
+
+    if invalid_count > 0 do
+      Logger.warning("PriceSync: skipped #{invalid_count} invalid listing prices in batch")
+    end
+
+    case valid_rows do
+      [] ->
+        0
+
+      rows ->
+        {count, _} =
+          Repo.insert_all(ListingPrice, Enum.reverse(rows),
+            on_conflict: :nothing,
+            conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
           )
 
         count

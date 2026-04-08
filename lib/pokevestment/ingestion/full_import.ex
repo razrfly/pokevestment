@@ -20,7 +20,7 @@ defmodule Pokevestment.Ingestion.FullImport do
   alias Pokevestment.Ingestion.Transformer
   alias Pokevestment.Cards.{Series, Set, Card, CardType, CardDexId}
   alias Pokevestment.Pokemon.Species
-  alias Pokevestment.Pricing.PriceSnapshot
+  alias Pokevestment.Pricing.{ExchangeRate, SoldPrice, ListingPrice}
 
   @doc "Run full import in FK dependency order."
   def run do
@@ -230,10 +230,10 @@ defmodule Pokevestment.Ingestion.FullImport do
             {:ok, %{"cards" => raw_cards}} when is_list(raw_cards) ->
               results =
                 Enum.reduce(raw_cards, {0, []}, fn card_entry, {count, fails} ->
-                  {card, types, dex_ids, snapshots} =
+                  {card, types, dex_ids, sold, listing} =
                     Transformer.card_attrs_minimal(card_entry, set_id)
 
-                  case upsert_card(card, types, dex_ids, snapshots, species_ids) do
+                  case upsert_card(card, types, dex_ids, sold, listing, species_ids) do
                     {:ok, _} ->
                       :counters.add(counter, 1, 1)
                       total = :counters.get(counter, 1)
@@ -298,7 +298,7 @@ defmodule Pokevestment.Ingestion.FullImport do
     )
   end
 
-  defp upsert_card(card_attrs, type_attrs, dex_id_attrs, snapshot_attrs, species_ids) do
+  defp upsert_card(card_attrs, type_attrs, dex_id_attrs, sold_attrs, listing_attrs, species_ids) do
     Repo.transaction(fn ->
       # Upsert the card
       case %Card{}
@@ -334,13 +334,23 @@ defmodule Pokevestment.Ingestion.FullImport do
             end
           end)
 
-          # Insert price_snapshots (never overwrite existing for same date)
-          Enum.each(snapshot_attrs, fn attrs ->
-            %PriceSnapshot{}
-            |> PriceSnapshot.changeset(attrs)
+          # Insert sold prices (never overwrite existing for same date)
+          Enum.each(sold_attrs, fn attrs ->
+            %SoldPrice{}
+            |> SoldPrice.changeset(attrs)
             |> Repo.insert(
               on_conflict: :nothing,
-              conflict_target: [:card_id, :source, :variant, :snapshot_date]
+              conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+            )
+          end)
+
+          # Insert listing prices (never overwrite existing for same date)
+          Enum.each(listing_attrs, fn attrs ->
+            %ListingPrice{}
+            |> ListingPrice.changeset(attrs)
+            |> Repo.insert(
+              on_conflict: :nothing,
+              conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
             )
           end)
 
@@ -366,6 +376,15 @@ defmodule Pokevestment.Ingestion.FullImport do
   def backfill_card_details do
     Logger.info("Backfilling card details from TCGdex...")
     start = System.monotonic_time(:millisecond)
+
+    # Fetch exchange rate once for the entire backfill
+    case ExchangeRate.fetch_and_cache() do
+      {:ok, rate_info} ->
+        Logger.info("Backfill: EUR/USD rate = #{rate_info.rate} (#{rate_info.date})")
+
+      {:error, reason} ->
+        Logger.warning("Backfill: could not fetch exchange rate: #{inspect(reason)}")
+    end
 
     species_ids = load_species_ids()
     sets_map = load_sets_map()
@@ -410,10 +429,10 @@ defmodule Pokevestment.Ingestion.FullImport do
 
               case Task.yield(task, 15_000) || Task.shutdown(task) do
                 {:ok, {:ok, card_raw}} ->
-                  {card, types, dex_ids, snapshots} =
+                  {card, types, dex_ids, sold, listing} =
                     Transformer.card_attrs(card_raw, set_data)
 
-                  case upsert_card(card, types, dex_ids, snapshots, species_ids) do
+                  case upsert_card(card, types, dex_ids, sold, listing, species_ids) do
                     {:ok, _} ->
                       :counters.add(counter, 1, 1)
                       done = :counters.get(counter, 1)
