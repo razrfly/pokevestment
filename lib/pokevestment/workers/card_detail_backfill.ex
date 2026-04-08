@@ -120,7 +120,16 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
   end
 
   defp fetch_and_upsert(card_id, sets_map, species_ids) do
-    task = Task.async(fn -> Tcgdex.get_card(card_id) end)
+    # Use try/catch inside the task to prevent linked-task crashes from
+    # killing the caller before Task.yield can observe the exit.
+    task =
+      Task.async(fn ->
+        try do
+          Tcgdex.get_card(card_id)
+        catch
+          :exit, reason -> {:error, {:exit, reason}}
+        end
+      end)
 
     case Task.yield(task, 15_000) || Task.shutdown(task) do
       {:ok, {:ok, card_raw}} ->

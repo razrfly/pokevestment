@@ -27,7 +27,7 @@ defmodule Pokevestment.ML.PriceFeatures do
       SELECT DISTINCT ON (sp.card_id)
         sp.card_id,
         sp.marketplace AS source,
-        sp.currency_original AS currency,
+        'USD' AS currency,
         sp.price_usd::float AS canonical_price
       FROM sold_prices sp
       JOIN cards c ON c.id = sp.card_id
@@ -57,7 +57,15 @@ defmodule Pokevestment.ML.PriceFeatures do
         sp.price_avg_30d::float
       FROM sold_prices sp
       WHERE sp.price_avg_1d IS NOT NULL OR sp.price_avg_7d IS NOT NULL OR sp.price_avg_30d IS NOT NULL
-      ORDER BY sp.card_id, sp.snapshot_date DESC
+      ORDER BY sp.card_id, sp.snapshot_date DESC,
+        CASE
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' THEN 1
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' THEN 2
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 3
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 4
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 5
+          ELSE 6
+        END
     )
     SELECT
       c.card_id,
