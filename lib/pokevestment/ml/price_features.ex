@@ -56,7 +56,15 @@ defmodule Pokevestment.ML.PriceFeatures do
         sp.price_avg_7d::float,
         sp.price_avg_30d::float
       FROM sold_prices sp
-      WHERE sp.price_avg_1d IS NOT NULL OR sp.price_avg_7d IS NOT NULL OR sp.price_avg_30d IS NOT NULL
+      JOIN cards c ON c.id = sp.card_id
+      WHERE (sp.price_avg_1d IS NOT NULL OR sp.price_avg_7d IS NOT NULL OR sp.price_avg_30d IS NOT NULL)
+        AND (
+          c.variants IS NULL
+          OR (sp.variant = 'normal' AND (c.variants->>'normal')::boolean IS NOT FALSE)
+          OR (sp.variant = 'holofoil' AND (c.variants->>'holo')::boolean IS NOT FALSE)
+          OR (sp.variant = 'reverse-holofoil' AND (c.variants->>'reverse')::boolean IS NOT FALSE)
+          OR sp.variant NOT IN ('normal', 'holofoil', 'reverse-holofoil')
+        )
       ORDER BY sp.card_id, sp.snapshot_date DESC,
         CASE
           WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' THEN 1
