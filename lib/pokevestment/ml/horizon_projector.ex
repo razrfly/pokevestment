@@ -91,7 +91,7 @@ defmodule Pokevestment.ML.HorizonProjector do
   defp safe_decimal(val) when is_integer(val), do: Decimal.new(val)
 
   defp ensure_float(v) when is_float(v), do: v
-  defp ensure_float(v) when is_integer(v), do: v / 1
+  defp ensure_float(v) when is_integer(v), do: v * 1.0
   defp ensure_float(%Decimal{} = d), do: Decimal.to_float(d)
   defp ensure_float(_), do: 0.0
 

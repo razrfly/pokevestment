@@ -67,11 +67,6 @@ defmodule PokevestmentWeb.SetLive.Show do
     predictions = fetch_predictions(id, params)
     total_cards = Enum.sum(Map.values(signal_summary))
 
-    marketplace_urls =
-      predictions
-      |> Enum.map(& &1.card_id)
-      |> Predictions.marketplace_urls_for_cards()
-
     {:noreply,
      assign(socket,
        set: set,
@@ -79,7 +74,6 @@ defmodule PokevestmentWeb.SetLive.Show do
        total_cards: total_cards,
        set_types: set_types,
        predictions: predictions,
-       marketplace_urls: marketplace_urls,
        params: params,
        sort_labels: @sort_labels,
        default_params: @default_params,

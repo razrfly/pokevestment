@@ -28,8 +28,8 @@ defmodule Pokevestment.ML.ExplanationEngine do
   end
 
   def generate(%{signal: signal} = prediction) do
-    top_pos = sorted_drivers(prediction[:top_positive_drivers] || %{}, :desc)
-    top_neg = sorted_drivers(prediction[:top_negative_drivers] || %{}, :asc)
+    top_pos = sorted_drivers(Map.get(prediction, :top_positive_drivers, %{}), :desc)
+    top_neg = sorted_drivers(Map.get(prediction, :top_negative_drivers, %{}), :asc)
 
     summary = build_summary(signal, prediction, top_pos, top_neg)
     positive_reasons = build_reasons(top_pos, 3)
@@ -47,9 +47,9 @@ defmodule Pokevestment.ML.ExplanationEngine do
   # --- Private ---
 
   defp build_summary(signal, prediction, top_pos, top_neg) do
-    current = format_price(prediction[:current_price], prediction[:price_currency])
-    fair = format_price(prediction[:predicted_fair_value], prediction[:price_currency])
-    gap = compute_gap_pct(prediction[:current_price], prediction[:predicted_fair_value])
+    current = format_price(Map.get(prediction, :current_price), Map.get(prediction, :price_currency))
+    fair = format_price(Map.get(prediction, :predicted_fair_value), Map.get(prediction, :price_currency))
+    gap = compute_gap_pct(Map.get(prediction, :current_price), Map.get(prediction, :predicted_fair_value))
 
     case signal_category(signal) do
       :bullish ->
@@ -77,7 +77,8 @@ defmodule Pokevestment.ML.ExplanationEngine do
 
       :bearish ->
         base = "This card appears overpriced at #{current} — fair value is #{fair}, #{gap} downside."
-        case Enum.take(top_pos, 1) do
+        pos = sorted_drivers(Map.get(prediction, :top_positive_drivers, %{}), :desc)
+        case Enum.take(pos, 1) do
           [{feature, _}] ->
             "#{base} #{FeatureDescriptions.label(feature)} provides some support."
           _ ->
@@ -164,6 +165,6 @@ defmodule Pokevestment.ML.ExplanationEngine do
 
   defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
   defp to_float(v) when is_float(v), do: v
-  defp to_float(v) when is_integer(v), do: v / 1
+  defp to_float(v) when is_integer(v), do: v * 1.0
   defp to_float(_), do: 0.0
 end

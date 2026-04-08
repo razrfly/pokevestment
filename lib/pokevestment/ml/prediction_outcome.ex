@@ -1,9 +1,11 @@
 defmodule Pokevestment.ML.PredictionOutcome do
   @moduledoc """
-  Records the actual outcome of a prediction after its 30-day maturity window.
+  Records the actual outcome of a prediction after a configurable maturity window.
 
   Each row links back to a `PredictionSnapshot` and captures the actual price
   at the outcome date, the realized return, and whether the signal was correct.
+  The `horizon_days` field (default 30) specifies which time horizon this outcome
+  evaluates, enabling multi-horizon accountability (e.g. 7d, 30d, 90d).
 
   The `outcome_price_source` and `outcome_price_currency` fields record which
   price variant was used for evaluation (e.g. "tcgplayer" / "USD"), since the

@@ -66,10 +66,10 @@ defmodule Pokevestment.ML.Scorer do
         do: df |> DF.pull("price_currency") |> Series.to_list(),
         else: List.duplicate(nil, length(card_ids))
 
-    # Extract feature columns for HorizonProjector opts
-    volatilities = safe_pull_list(df, "price_volatility", length(card_ids))
-    days_since_releases = safe_pull_list(df, "days_since_release", length(card_ids))
-    meta_shares = safe_pull_list(df, "meta_share_30d", length(card_ids))
+    # Extract feature columns for HorizonProjector opts (as tuples for O(1) access)
+    volatilities = safe_pull_list(df, "price_volatility", length(card_ids)) |> List.to_tuple()
+    days_since_releases = safe_pull_list(df, "days_since_release", length(card_ids)) |> List.to_tuple()
+    meta_shares = safe_pull_list(df, "meta_share_30d", length(card_ids)) |> List.to_tuple()
 
     # Encode the DataFrame using training-time encodings
     encoded_df = encode_for_scoring(df, encodings)
@@ -119,7 +119,7 @@ defmodule Pokevestment.ML.Scorer do
         current_price_float =
           case current_price do
             %Decimal{} -> Decimal.to_float(current_price)
-            x when is_number(x) -> x / 1
+            x when is_number(x) -> x * 1.0
             _ -> 0.0
           end
 
@@ -141,9 +141,9 @@ defmodule Pokevestment.ML.Scorer do
 
         horizon_projections =
           HorizonProjector.project(current_price_float, predicted_fair_value,
-            volatility: Enum.at(volatilities, global_idx) || 0.0,
-            days_since_release: Enum.at(days_since_releases, global_idx) || 0,
-            meta_share: Enum.at(meta_shares, global_idx) || 0.0
+            volatility: elem(volatilities, global_idx) || 0.0,
+            days_since_release: elem(days_since_releases, global_idx) || 0,
+            meta_share: elem(meta_shares, global_idx) || 0.0
           )
 
         prediction_map = %{
