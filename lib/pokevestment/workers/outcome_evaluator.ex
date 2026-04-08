@@ -152,7 +152,7 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
                   WHEN ? = 'tcgplayer' AND ? = 'holofoil' THEN 2
                   WHEN ? = 'tcgplayer' AND ? = 'reverse-holofoil' THEN 3
                   WHEN ? = 'cardmarket' AND ? = 'normal' THEN 4
-                  WHEN ? = 'cardmarket' AND ? = 'holo' THEN 5
+                  WHEN ? = 'cardmarket' AND ? IN ('reverse-holofoil', 'holo') THEN 5
                   ELSE 6
                 END
                 """,

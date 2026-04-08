@@ -105,6 +105,8 @@ defmodule Pokevestment.ML.Accountability do
   def pipeline_status do
     workers = [
       "Pokevestment.Workers.DailyPriceSync",
+      "Pokevestment.Workers.CardDetailBackfill",
+      "Pokevestment.Workers.DataQualityCheck",
       "Pokevestment.Workers.TournamentSync",
       "Pokevestment.Workers.DailyPrediction",
       "Pokevestment.Workers.OutcomeEvaluator"

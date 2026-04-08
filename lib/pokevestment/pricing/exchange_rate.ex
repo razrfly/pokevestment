@@ -16,11 +16,10 @@ defmodule Pokevestment.Pricing.ExchangeRate do
   Ensures the ETS table exists. Called from application startup.
   """
   def init do
-    if :ets.whereis(@ets_table) == :undefined do
-      :ets.new(@ets_table, [:named_table, :set, :public, read_concurrency: true])
-    end
-
+    :ets.new(@ets_table, [:named_table, :set, :public, read_concurrency: true])
     :ok
+  rescue
+    ArgumentError -> :ok
   end
 
   @doc """

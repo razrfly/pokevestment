@@ -24,7 +24,7 @@ defmodule Mix.Tasks.Pokevestment.PriceSync do
         Mix.shell().info("\nPrice sync complete in #{format_duration(summary.elapsed_ms)}")
         Mix.shell().info("  Sets mapped:        #{summary.total}")
         Mix.shell().info("  Sets processed:     #{summary.processed}")
-        Mix.shell().info("  Snapshots inserted: #{summary.snapshots_inserted}")
+        Mix.shell().info("  Prices inserted:    #{summary.prices_inserted}")
 
         if summary.failed != [] do
           Mix.shell().info("  Failed sets:        #{length(summary.failed)}")
