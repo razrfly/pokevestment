@@ -37,6 +37,7 @@ defmodule Pokevestment.ML.Accountability do
     )
     |> Repo.all()
     |> Map.new(fn {signal, %{total: total, correct: correct}} ->
+      correct = decimal_to_float(correct)
       accuracy = if total > 0, do: Float.round(correct / total * 100, 1), else: 0.0
       {signal, %{total: total, correct: correct, accuracy: accuracy}}
     end)

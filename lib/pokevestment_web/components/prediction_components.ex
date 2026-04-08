@@ -193,14 +193,24 @@ defmodule PokevestmentWeb.PredictionComponents do
   attr :explanation, :map, required: true
 
   def explanation_panel(assigns) do
+    explanation = assigns.explanation || %{}
+    positive = explanation["positive_reasons"] || []
+    negative = explanation["negative_reasons"] || []
+
+    assigns =
+      assigns
+      |> assign(:explanation, explanation)
+      |> assign(:positive_reasons, positive)
+      |> assign(:negative_reasons, negative)
+
     ~H"""
     <div class="space-y-3">
       <p class="text-sm font-medium text-olive-800 dark:text-olive-200">
         {@explanation["summary"]}
       </p>
 
-      <ul :if={@explanation["positive_reasons"] != []} class="space-y-1.5">
-        <li :for={reason <- @explanation["positive_reasons"]} class="flex items-start gap-2 text-sm">
+      <ul :if={@positive_reasons != []} class="space-y-1.5">
+        <li :for={reason <- @positive_reasons} class="flex items-start gap-2 text-sm">
           <span class="mt-1 block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-500" />
           <span>
             <span class="font-medium text-emerald-700 dark:text-emerald-400">{reason["label"]}</span>
@@ -209,8 +219,8 @@ defmodule PokevestmentWeb.PredictionComponents do
         </li>
       </ul>
 
-      <ul :if={@explanation["negative_reasons"] != []} class="space-y-1.5">
-        <li :for={reason <- @explanation["negative_reasons"]} class="flex items-start gap-2 text-sm">
+      <ul :if={@negative_reasons != []} class="space-y-1.5">
+        <li :for={reason <- @negative_reasons} class="flex items-start gap-2 text-sm">
           <span class="mt-1 block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
           <span>
             <span class="font-medium text-red-700 dark:text-red-400">{reason["label"]}</span>
@@ -282,9 +292,6 @@ defmodule PokevestmentWeb.PredictionComponents do
 
   # Horizon projections (original compact version, kept for backward compat)
 
-  attr :projections, :map, required: true
-  attr :currency, :string, default: nil
-
   @horizon_labels %{"1" => "1d", "7" => "7d", "30" => "30d", "90" => "90d", "365" => "1yr"}
 
   def horizon_projections(assigns) do
@@ -292,10 +299,12 @@ defmodule PokevestmentWeb.PredictionComponents do
       assigns.projections
       |> Enum.sort_by(fn {k, _v} -> String.to_integer(k) end)
 
-    assigns = assign(assigns, sorted: sorted, symbol: currency_symbol(assigns.currency))
+    cols = sorted |> length() |> min(5) |> max(1)
+
+    assigns = assign(assigns, sorted: sorted, symbol: currency_symbol(assigns.currency), cols: cols)
 
     ~H"""
-    <div class="grid grid-cols-4 gap-2 text-center">
+    <div class="grid gap-2 text-center" style={"grid-template-columns: repeat(#{@cols}, minmax(0, 1fr))"}>
       <div :for={{horizon, data} <- @sorted} class="space-y-0.5">
         <span class="block text-[10px] font-medium uppercase tracking-wider text-olive-500 dark:text-olive-500">
           {horizon_label(horizon)}
@@ -385,7 +394,7 @@ defmodule PokevestmentWeb.PredictionComponents do
 
   defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
   defp to_float(n) when is_float(n), do: n
-  defp to_float(n) when is_integer(n), do: n / 1
+  defp to_float(n) when is_integer(n), do: n * 1.0
   defp to_float(_), do: 0.0
 
   defp bar_width(value, max_val) when max_val > 0 do
