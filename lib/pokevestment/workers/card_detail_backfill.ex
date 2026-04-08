@@ -72,10 +72,14 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
             "[CardDetailBackfill] No progress made, #{remaining} cards may be permanently unfetchable — stopping"
           )
 
+          :ok
+
         follow_up >= @max_follow_ups ->
           Logger.warning(
             "[CardDetailBackfill] Reached follow-up limit (#{@max_follow_ups}), #{remaining} cards still incomplete — stopping"
           )
+
+          :ok
 
         true ->
           Logger.info("[CardDetailBackfill] #{remaining} cards still need backfill, scheduling follow-up")
@@ -83,11 +87,10 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
           case %{"follow_up" => follow_up + 1} |> __MODULE__.new(schedule_in: 300) |> Oban.insert() do
             {:ok, _job} -> :ok
             {:error, reason} ->
-              Logger.warning("[CardDetailBackfill] Failed to schedule follow-up job: #{inspect(reason)}")
+              Logger.error("[CardDetailBackfill] Failed to schedule follow-up job: #{inspect(reason)}")
+              {:error, "failed to schedule follow-up: #{inspect(reason)}"}
           end
       end
-
-      :ok
     end
   end
 
@@ -108,6 +111,7 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
       from(c in Card,
         where: is_nil(c.rarity),
         select: c.id,
+        order_by: [asc: c.id],
         limit: ^@batch_size
       )
       |> Repo.all()
@@ -133,8 +137,9 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
         {:ok, {:error, card_id, _reason}}, {total_ok, total_fails, total_sold, total_listing} ->
           {total_ok, [card_id | total_fails], total_sold, total_listing}
 
-        {:exit, _reason}, acc ->
-          acc
+        {:exit, reason}, {total_ok, total_fails, total_sold, total_listing} ->
+          Logger.warning("[CardDetailBackfill] Task exited: #{inspect(reason)}")
+          {total_ok, [:exit_timeout | total_fails], total_sold, total_listing}
       end)
 
     %{updated: updated, failed: failed, sold_added: sold_added, listing_added: listing_added}
@@ -199,21 +204,29 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
           end)
 
           Enum.each(sold_attrs, fn attrs ->
-            %SoldPrice{}
-            |> SoldPrice.changeset(attrs)
-            |> Repo.insert(
-              on_conflict: :nothing,
-              conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
-            )
+            case %SoldPrice{}
+                 |> SoldPrice.changeset(attrs)
+                 |> Repo.insert(
+                   on_conflict: :nothing,
+                   conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+                 ) do
+              {:ok, _} -> :ok
+              {:error, cs} ->
+                Logger.warning("[CardDetailBackfill] SoldPrice insert failed for #{card.id}: #{inspect(cs.errors)}")
+            end
           end)
 
           Enum.each(listing_attrs, fn attrs ->
-            %ListingPrice{}
-            |> ListingPrice.changeset(attrs)
-            |> Repo.insert(
-              on_conflict: :nothing,
-              conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
-            )
+            case %ListingPrice{}
+                 |> ListingPrice.changeset(attrs)
+                 |> Repo.insert(
+                   on_conflict: :nothing,
+                   conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+                 ) do
+              {:ok, _} -> :ok
+              {:error, cs} ->
+                Logger.warning("[CardDetailBackfill] ListingPrice insert failed for #{card.id}: #{inspect(cs.errors)}")
+            end
           end)
 
           card
