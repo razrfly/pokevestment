@@ -79,7 +79,12 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
 
         true ->
           Logger.info("[CardDetailBackfill] #{remaining} cards still need backfill, scheduling follow-up")
-          %{"follow_up" => follow_up + 1} |> __MODULE__.new(schedule_in: 300) |> Oban.insert()
+
+          case %{"follow_up" => follow_up + 1} |> __MODULE__.new(schedule_in: 300) |> Oban.insert() do
+            {:ok, _job} -> :ok
+            {:error, reason} ->
+              Logger.warning("[CardDetailBackfill] Failed to schedule follow-up job: #{inspect(reason)}")
+          end
       end
 
       :ok
@@ -96,39 +101,37 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
     species_ids = load_species_ids()
     sets_map = load_sets_map()
 
-    # Get cards missing rarity, grouped by set for efficient processing
-    cards_by_set =
+    # Fetch individual card IDs — no set grouping needed since each card is
+    # fetched individually. Flat async_stream avoids the previous issue where
+    # large set groups could blow the outer timeout and silently discard progress.
+    card_ids =
       from(c in Card,
         where: is_nil(c.rarity),
-        select: {c.set_id, c.id},
+        select: c.id,
         limit: ^@batch_size
       )
       |> Repo.all()
-      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
 
     {updated, failed, sold_added, listing_added} =
-      cards_by_set
-      |> Enum.to_list()
+      card_ids
       |> Task.async_stream(
-        fn {_set_id, card_ids} ->
-          Enum.reduce(card_ids, {0, [], 0, 0}, fn card_id, {ok, fails, sold, listing} ->
-            case fetch_and_upsert(card_id, sets_map, species_ids) do
-              {:ok, sold_count, listing_count} ->
-                {ok + 1, fails, sold + sold_count, listing + listing_count}
-
-              {:error, _} ->
-                {ok, [card_id | fails], sold, listing}
-            end
-          end)
+        fn card_id ->
+          case fetch_and_upsert(card_id, sets_map, species_ids) do
+            {:ok, sold_count, listing_count} -> {:ok, card_id, sold_count, listing_count}
+            {:error, reason} -> {:error, card_id, reason}
+          end
         end,
         max_concurrency: 5,
-        timeout: 120_000,
+        timeout: 30_000,
         on_timeout: :kill_task,
         ordered: false
       )
       |> Enum.reduce({0, [], 0, 0}, fn
-        {:ok, {ok, fails, sold, listing}}, {total_ok, total_fails, total_sold, total_listing} ->
-          {total_ok + ok, total_fails ++ fails, total_sold + sold, total_listing + listing}
+        {:ok, {:ok, _card_id, sold, listing}}, {total_ok, total_fails, total_sold, total_listing} ->
+          {total_ok + 1, total_fails, total_sold + sold, total_listing + listing}
+
+        {:ok, {:error, card_id, _reason}}, {total_ok, total_fails, total_sold, total_listing} ->
+          {total_ok, [card_id | total_fails], total_sold, total_listing}
 
         {:exit, _reason}, acc ->
           acc
