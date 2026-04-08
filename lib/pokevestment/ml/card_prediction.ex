@@ -17,6 +17,8 @@ defmodule Pokevestment.ML.CardPrediction do
     field :top_positive_drivers, :map
     field :top_negative_drivers, :map
     field :umbrella_breakdown, :map
+    field :horizon_projections, :map
+    field :explanation, :map
     field :price_currency, :string
     field :price_source, :string
 
@@ -29,7 +31,7 @@ defmodule Pokevestment.ML.CardPrediction do
   end
 
   @required_fields ~w(card_id model_version prediction_date signal)a
-  @optional_fields ~w(predicted_fair_value current_price value_ratio signal_strength top_positive_drivers top_negative_drivers umbrella_breakdown price_currency price_source)a
+  @optional_fields ~w(predicted_fair_value current_price value_ratio signal_strength top_positive_drivers top_negative_drivers umbrella_breakdown horizon_projections explanation price_currency price_source)a
 
   @valid_signals ~w(STRONG_BUY BUY HOLD OVERVALUED INSUFFICIENT_DATA)
 

@@ -16,6 +16,8 @@ defmodule Pokevestment.ML.PredictionSnapshot do
     field :actual_price, :decimal
     field :actual_return, :decimal
     field :outcome, :string
+    field :horizon_projections, :map
+    field :explanation, :map
     field :price_currency, :string
     field :price_source, :string
 
@@ -25,7 +27,7 @@ defmodule Pokevestment.ML.PredictionSnapshot do
   end
 
   @required_fields ~w(card_id model_version prediction_date signal)a
-  @optional_fields ~w(predicted_fair_value current_price value_ratio signal_strength features_snapshot actual_price actual_return outcome price_currency price_source)a
+  @optional_fields ~w(predicted_fair_value current_price value_ratio signal_strength features_snapshot actual_price actual_return outcome horizon_projections explanation price_currency price_source)a
 
   @valid_signals ~w(STRONG_BUY BUY HOLD OVERVALUED INSUFFICIENT_DATA)
 

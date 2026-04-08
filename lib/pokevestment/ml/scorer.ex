@@ -7,7 +7,7 @@ defmodule Pokevestment.ML.Scorer do
 
   require Explorer.DataFrame, as: DF
   alias Explorer.Series
-  alias Pokevestment.ML.{Preprocessing, Trainer}
+  alias Pokevestment.ML.{ExplanationEngine, HorizonProjector, Preprocessing, Trainer}
 
   @top_n_drivers 5
 
@@ -65,6 +65,11 @@ defmodule Pokevestment.ML.Scorer do
       if "price_currency" in DF.names(df),
         do: df |> DF.pull("price_currency") |> Series.to_list(),
         else: List.duplicate(nil, length(card_ids))
+
+    # Extract feature columns for HorizonProjector opts
+    volatilities = safe_pull_list(df, "price_volatility", length(card_ids))
+    days_since_releases = safe_pull_list(df, "days_since_release", length(card_ids))
+    meta_shares = safe_pull_list(df, "meta_share_30d", length(card_ids))
 
     # Encode the DataFrame using training-time encodings
     encoded_df = encode_for_scoring(df, encodings)
@@ -134,7 +139,14 @@ defmodule Pokevestment.ML.Scorer do
         {top_positive, top_negative, umbrella_breakdown} =
           compute_drivers(feature_columns, feature_shap)
 
-        %{
+        horizon_projections =
+          HorizonProjector.project(current_price_float, predicted_fair_value,
+            volatility: Enum.at(volatilities, global_idx) || 0.0,
+            days_since_release: Enum.at(days_since_releases, global_idx) || 0,
+            meta_share: Enum.at(meta_shares, global_idx) || 0.0
+          )
+
+        prediction_map = %{
           card_id: card_id,
           model_version: version,
           prediction_date: prediction_date,
@@ -146,9 +158,13 @@ defmodule Pokevestment.ML.Scorer do
           top_positive_drivers: top_positive,
           top_negative_drivers: top_negative,
           umbrella_breakdown: umbrella_breakdown,
+          horizon_projections: horizon_projections,
           price_source: Enum.at(price_sources, global_idx),
           price_currency: Enum.at(price_currencies, global_idx)
         }
+
+        explanation = ExplanationEngine.generate(prediction_map)
+        Map.put(prediction_map, :explanation, explanation)
       end)
     end)
   end
@@ -157,7 +173,7 @@ defmodule Pokevestment.ML.Scorer do
     card_ids = df |> DF.pull("card_id") |> Series.to_list()
 
     Enum.map(card_ids, fn card_id ->
-      %{
+      prediction_map = %{
         card_id: card_id,
         model_version: version,
         prediction_date: prediction_date,
@@ -169,9 +185,12 @@ defmodule Pokevestment.ML.Scorer do
         top_positive_drivers: %{},
         top_negative_drivers: %{},
         umbrella_breakdown: %{},
+        horizon_projections: %{},
         price_source: nil,
         price_currency: nil
       }
+
+      Map.put(prediction_map, :explanation, ExplanationEngine.generate(prediction_map))
     end)
   end
 
@@ -231,6 +250,12 @@ defmodule Pokevestment.ML.Scorer do
       |> Map.new(fn {k, v} -> {k, Float.round(v, 6)} end)
 
     {top_positive, top_negative, umbrella_breakdown}
+  end
+
+  defp safe_pull_list(df, col, n) do
+    if col in DF.names(df),
+      do: df |> DF.pull(col) |> Series.to_list(),
+      else: List.duplicate(nil, n)
   end
 
   defp safe_decimal(nil), do: nil

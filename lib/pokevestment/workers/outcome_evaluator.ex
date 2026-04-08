@@ -1,10 +1,11 @@
 defmodule Pokevestment.Workers.OutcomeEvaluator do
   @moduledoc """
-  Oban worker that evaluates prediction accuracy after 30 days.
+  Oban worker that evaluates prediction accuracy across multiple time horizons.
 
-  For each mature prediction snapshot (prediction_date <= today - 30),
-  looks up the actual price at the outcome date and records whether
-  the signal was correct.
+  For each horizon (7d, 30d, 90d, 365d), finds mature prediction snapshots
+  (prediction_date <= today - horizon_days) that haven't been evaluated for
+  that horizon yet, looks up the actual price, and records whether the signal
+  was correct.
 
   Runs daily at 10 AM UTC. Partial evaluation is fine — skipped
   snapshots (no price data available) retry the next day.
@@ -22,27 +23,32 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
 
   @batch_limit 10_000
   @lookback_days 7
+  @horizons [7, 30, 90, 365]
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     today = Date.utc_today()
-    cutoff_date = Date.add(today, -30)
 
-    snapshots = fetch_mature_snapshots(cutoff_date)
+    Enum.each(@horizons, fn horizon_days ->
+      cutoff_date = Date.add(today, -horizon_days)
+      snapshots = fetch_mature_snapshots(cutoff_date, horizon_days)
 
-    if snapshots == [] do
-      Logger.info("[OutcomeEvaluator] 0 mature snapshots found")
-      :ok
-    else
-      Logger.info("[OutcomeEvaluator] Found #{length(snapshots)} mature snapshots to evaluate")
-      evaluate_batch(snapshots)
-    end
+      if snapshots != [] do
+        Logger.info(
+          "[OutcomeEvaluator] Found #{length(snapshots)} mature snapshots for #{horizon_days}d horizon"
+        )
+
+        evaluate_batch(snapshots, horizon_days)
+      end
+    end)
+
+    :ok
   end
 
-  defp fetch_mature_snapshots(cutoff_date) do
+  defp fetch_mature_snapshots(cutoff_date, horizon_days) do
     from(ps in PredictionSnapshot,
       left_join: po in PredictionOutcome,
-      on: po.prediction_snapshot_id == ps.id,
+      on: po.prediction_snapshot_id == ps.id and po.horizon_days == ^horizon_days,
       where: ps.prediction_date <= ^cutoff_date,
       where: is_nil(po.id),
       where: ps.signal != "INSUFFICIENT_DATA",
@@ -54,11 +60,11 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
     |> Repo.all()
   end
 
-  defp evaluate_batch(snapshots) do
+  defp evaluate_batch(snapshots, horizon_days) do
     # Collect all card_ids and their outcome dates for batch price lookup
     card_outcome_pairs =
       Enum.map(snapshots, fn ps ->
-        {ps.card_id, Date.add(ps.prediction_date, 30)}
+        {ps.card_id, Date.add(ps.prediction_date, horizon_days)}
       end)
 
     outcome_prices = batch_lookup_prices(card_outcome_pairs)
@@ -67,7 +73,7 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
 
     {outcomes, skipped} =
       Enum.reduce(snapshots, {[], 0}, fn ps, {acc, skip_count} ->
-        outcome_date = Date.add(ps.prediction_date, 30)
+        outcome_date = Date.add(ps.prediction_date, horizon_days)
         price_key = {ps.card_id, outcome_date}
 
         case Map.get(outcome_prices, price_key) do
@@ -99,6 +105,7 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
               signal_correct: signal_correct,
               outcome_price_source: source,
               outcome_price_currency: currency,
+              horizon_days: horizon_days,
               inserted_at: now
             }
 
@@ -108,7 +115,7 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
 
     inserted_count = batch_insert(outcomes)
 
-    log_summary(outcomes, skipped, inserted_count)
+    log_summary(outcomes, skipped, inserted_count, horizon_days)
     :ok
   end
 
@@ -212,14 +219,14 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
       {count, _} =
         Repo.insert_all(PredictionOutcome, chunk,
           on_conflict: :nothing,
-          conflict_target: [:prediction_snapshot_id]
+          conflict_target: [:prediction_snapshot_id, :horizon_days]
         )
 
       total + count
     end)
   end
 
-  defp log_summary(outcomes, skipped, inserted_count) do
+  defp log_summary(outcomes, skipped, inserted_count, horizon_days) do
     total = length(outcomes)
 
     signal_breakdown =
@@ -234,7 +241,7 @@ defmodule Pokevestment.Workers.OutcomeEvaluator do
       |> Enum.join(", ")
 
     Logger.info(
-      "[OutcomeEvaluator] Evaluated #{total} snapshots, inserted #{inserted_count}, skipped #{skipped} (no price data). " <>
+      "[OutcomeEvaluator] [#{horizon_days}d] Evaluated #{total} snapshots, inserted #{inserted_count}, skipped #{skipped} (no price data). " <>
         "Accuracy: #{signal_breakdown}"
     )
   end

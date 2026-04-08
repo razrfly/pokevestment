@@ -102,6 +102,19 @@ defmodule Pokevestment.Predictions do
   end
 
   @doc """
+  Gets a card prediction with full card associations for the detail page.
+  Preloads card with card_types and set.
+  Returns nil if no prediction exists.
+  """
+  def get_card_prediction(card_id) do
+    from(p in CardPrediction,
+      where: p.card_id == ^card_id,
+      preload: [card: [:card_types, :set]]
+    )
+    |> Repo.one()
+  end
+
+  @doc """
   Returns a summary of signal counts for a specific set.
 
   Returns a map like `%{"STRONG_BUY" => 2, "BUY" => 5, "HOLD" => 150}`.
