@@ -47,6 +47,7 @@ defmodule Pokevestment.ML.PredictionOutcome do
     |> validate_length(:model_version, max: 20)
     |> validate_length(:signal, max: 20)
     |> validate_number(:horizon_days, greater_than: 0)
+    |> check_constraint(:horizon_days, name: :prediction_outcomes_horizon_days_positive)
     |> unique_constraint([:prediction_snapshot_id, :horizon_days])
     |> foreign_key_constraint(:prediction_snapshot_id)
     |> foreign_key_constraint(:card_id)
