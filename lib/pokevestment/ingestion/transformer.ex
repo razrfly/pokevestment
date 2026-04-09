@@ -827,4 +827,271 @@ defmodule Pokevestment.Ingestion.Transformer do
 
   defp generation_from_dex_ids([first | _]), do: generation_for_dex_id(first)
   defp generation_from_dex_ids(_), do: nil
+
+  # --- PokemonPriceTracker (PPT) Price Builders ---
+
+  @doc "Normalize PPT condition strings to kebab-case. Unknown conditions become \"aggregate\"."
+  def normalize_condition(nil), do: "aggregate"
+  def normalize_condition(""), do: "aggregate"
+
+  def normalize_condition(raw) when is_binary(raw) do
+    cleaned =
+      raw
+      |> String.downcase()
+      |> String.replace(~r/\s+(holofoil|reverse holofoil|normal)$/i, "")
+      |> String.trim()
+
+    case cleaned do
+      "near mint" -> "near-mint"
+      "lightly played" -> "lightly-played"
+      "moderately played" -> "moderately-played"
+      "heavily played" -> "heavily-played"
+      "damaged" -> "damaged"
+      _ -> "aggregate"
+    end
+  end
+
+  @doc "Normalize PPT printing/variant names to kebab-case."
+  def normalize_ppt_variant("Holofoil"), do: "holofoil"
+  def normalize_ppt_variant("Normal"), do: "normal"
+  def normalize_ppt_variant("Reverse Holofoil"), do: "reverse-holofoil"
+  def normalize_ppt_variant(nil), do: "normal"
+
+  def normalize_ppt_variant(other) when is_binary(other) do
+    other |> String.downcase() |> String.replace(" ", "-")
+  end
+
+  @doc """
+  Build sold and listing price attrs from a PPT API card response.
+
+  Returns `{[sold_price_attrs], [listing_price_attrs]}`.
+
+  Handles three tiers:
+  1. Aggregate prices from `prices.market` / `prices.low` (condition: "aggregate")
+  2. Per-condition variant prices from `prices.variants` (condition: "near-mint", etc.)
+  3. Historical prices from `priceHistory.variants` (past snapshot_dates)
+  """
+  def build_prices_from_ppt(nil), do: {[], []}
+
+  def build_prices_from_ppt(ppt_card) do
+    card_id = ppt_card["externalCatalogId"]
+
+    unless card_id do
+      {[], []}
+    else
+      prices = ppt_card["prices"] || %{}
+      tcg_player_url = ppt_card["tcgPlayerUrl"]
+      source_updated_at = parse_datetime(ppt_card["lastScrapedAt"])
+      today = Date.utc_today()
+
+      product_id = parse_tcg_player_id(ppt_card["tcgPlayerId"])
+      primary_variant = normalize_ppt_variant(prices["primaryPrinting"])
+
+      base = %{
+        card_id: card_id,
+        marketplace: "tcgplayer",
+        api_source: "pokemonpricetracker",
+        variant: primary_variant,
+        condition: "aggregate",
+        snapshot_date: today,
+        currency_original: "USD",
+        product_id: product_id,
+        source_updated_at: source_updated_at
+      }
+
+      full_metadata = build_ppt_full_metadata(ppt_card)
+
+      # Tier 1: Aggregate prices
+      {agg_sold, agg_listing} = build_ppt_aggregate(base, prices, full_metadata)
+
+      # Tier 2: Per-condition variant prices
+      {cond_sold, cond_listing} =
+        build_ppt_condition_prices(
+          card_id, prices["variants"], product_id,
+          source_updated_at, tcg_player_url, today
+        )
+
+      # Tier 3: Historical prices
+      history_sold =
+        build_ppt_history_prices(
+          card_id, ppt_card["priceHistory"], product_id,
+          source_updated_at, tcg_player_url
+        )
+
+      # Ensure full API response is preserved on at least one row.
+      # If no aggregate sold row was created (market price nil), attach
+      # the full response to the first condition or history row instead.
+      all_sold = agg_sold ++ cond_sold ++ history_sold
+
+      all_sold =
+        if agg_sold == [] and all_sold != [] do
+          [first | rest] = all_sold
+          [Map.update(first, :metadata, full_metadata, &Map.merge(full_metadata, &1)) | rest]
+        else
+          all_sold
+        end
+
+      {all_sold, agg_listing ++ cond_listing}
+    end
+  end
+
+  defp build_ppt_aggregate(base, prices, full_metadata) do
+    market = to_decimal(prices["market"])
+    low = to_decimal(prices["low"])
+
+    sold =
+      if market do
+        [Map.merge(base, %{
+          price: market,
+          price_usd: market,
+          exchange_rate: Decimal.new(1),
+          exchange_rate_date: Date.utc_today(),
+          metadata: full_metadata
+        })]
+      else
+        []
+      end
+
+    listing =
+      if low do
+        [Map.merge(base, %{
+          price_low: low,
+          price_low_usd: low,
+          exchange_rate: Decimal.new(1),
+          exchange_rate_date: Date.utc_today(),
+          metadata: %{"marketplace_url" => base.card_id && full_metadata["marketplace_url"]}
+        })]
+      else
+        []
+      end
+
+    {sold, listing}
+  end
+
+  defp build_ppt_condition_prices(_card_id, nil, _pid, _updated, _url, _today), do: {[], []}
+
+  defp build_ppt_condition_prices(card_id, variants_map, product_id, source_updated_at, tcg_player_url, today) do
+    Enum.reduce(variants_map, {[], []}, fn {printing_name, conditions}, {sold_acc, listing_acc} ->
+      variant = normalize_ppt_variant(printing_name)
+
+      Enum.reduce(conditions, {sold_acc, listing_acc}, fn
+        {condition_name, %{"price" => _} = data}, {s_acc, l_acc} ->
+          condition = normalize_condition(condition_name)
+          price = to_decimal(data["price"])
+
+          if price do
+            sold = %{
+              card_id: card_id,
+              marketplace: "tcgplayer",
+              api_source: "pokemonpricetracker",
+              variant: variant,
+              condition: condition,
+              snapshot_date: today,
+              currency_original: "USD",
+              product_id: product_id,
+              source_updated_at: source_updated_at,
+              price: price,
+              price_usd: price,
+              exchange_rate: Decimal.new(1),
+              exchange_rate_date: Date.utc_today(),
+              metadata: %{"marketplace_url" => tcg_player_url}
+            }
+
+            {[sold | s_acc], l_acc}
+          else
+            {s_acc, l_acc}
+          end
+
+        _, acc ->
+          acc
+      end)
+    end)
+  end
+
+  defp build_ppt_history_prices(_card_id, nil, _pid, _updated, _url), do: []
+
+  defp build_ppt_history_prices(card_id, price_history, product_id, source_updated_at, tcg_player_url) do
+    variants_history = price_history["variants"] || %{}
+    today = Date.utc_today()
+
+    Enum.flat_map(variants_history, fn {printing_name, conditions} ->
+      variant = normalize_ppt_variant(printing_name)
+
+      Enum.flat_map(conditions, fn
+        {condition_name, %{"history" => history}} when is_list(history) ->
+          condition = normalize_condition(condition_name)
+
+          history
+          |> Enum.reject(fn entry ->
+            case parse_date_from_iso(entry["date"]) do
+              {:ok, date} -> date == today
+              _ -> true
+            end
+          end)
+          |> Enum.map(fn entry ->
+            {:ok, snapshot_date} = parse_date_from_iso(entry["date"])
+            market = to_decimal(entry["market"])
+
+            %{
+              card_id: card_id,
+              marketplace: "tcgplayer",
+              api_source: "pokemonpricetracker",
+              variant: variant,
+              condition: condition,
+              snapshot_date: snapshot_date,
+              currency_original: "USD",
+              product_id: product_id,
+              source_updated_at: source_updated_at,
+              price: market,
+              price_usd: market,
+              exchange_rate: Decimal.new(1),
+              exchange_rate_date: snapshot_date,
+              metadata: %{
+                "marketplace_url" => tcg_player_url,
+                "volume" => entry["volume"]
+              }
+            }
+          end)
+          |> Enum.filter(fn attrs -> attrs.price != nil end)
+
+        _ ->
+          []
+      end)
+    end)
+  end
+
+  defp build_ppt_full_metadata(ppt_card) do
+    prices = ppt_card["prices"] || %{}
+
+    %{
+      "marketplace_url" => ppt_card["tcgPlayerUrl"],
+      "sellers" => prices["sellers"],
+      "listings" => prices["listings"],
+      "primary_printing" => prices["primaryPrinting"],
+      "data_completeness" => ppt_card["dataCompleteness"],
+      "ppt_response" => ppt_card
+    }
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Map.new()
+  end
+
+  defp parse_tcg_player_id(nil), do: nil
+
+  defp parse_tcg_player_id(id) when is_integer(id), do: id
+
+  defp parse_tcg_player_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
+
+  defp parse_date_from_iso(nil), do: {:error, :nil}
+
+  defp parse_date_from_iso(str) when is_binary(str) do
+    case DateTime.from_iso8601(str) do
+      {:ok, dt, _} -> {:ok, DateTime.to_date(dt)}
+      _ -> {:error, :parse_failed}
+    end
+  end
 end

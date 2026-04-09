@@ -102,5 +102,29 @@ defmodule Pokevestment.Pricing.ListingPriceTest do
 
       assert errors_on(changeset)[:card_id]
     end
+
+    test "different conditions on same card/marketplace/variant/date do NOT conflict" do
+      {:ok, _} =
+        %ListingPrice{}
+        |> ListingPrice.changeset(Map.put(@valid_attrs, :condition, "aggregate"))
+        |> Pokevestment.Repo.insert()
+
+      {:ok, _} =
+        %ListingPrice{}
+        |> ListingPrice.changeset(Map.put(@valid_attrs, :condition, "near-mint"))
+        |> Pokevestment.Repo.insert()
+    end
+
+    test "validates condition max length" do
+      attrs = Map.put(@valid_attrs, :condition, String.duplicate("x", 31))
+      changeset = ListingPrice.changeset(%ListingPrice{}, attrs)
+      refute changeset.valid?
+      assert errors_on(changeset)[:condition]
+    end
+
+    test "condition defaults to aggregate" do
+      changeset = ListingPrice.changeset(%ListingPrice{}, @valid_attrs)
+      assert Ecto.Changeset.get_field(changeset, :condition) == "aggregate"
+    end
   end
 end

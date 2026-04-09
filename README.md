@@ -324,8 +324,8 @@ The umbrellas give users a mental model: "this card is valuable because of WHAT 
 | Future Feature | Umbrella | Source |
 |---------------|----------|--------|
 | Graded population (PSA census) | New: **Scarcity & Grading** | PSA API / scraping |
-| Historical price backfill | Price & Market Signals | PokemonPriceTracker |
-| Japanese market pricing | Price & Market Signals | PokemonPriceTracker |
+| Historical price backfill | Price & Market Signals | PokemonPriceTracker (integrated — #101) |
+| Japanese market pricing | Price & Market Signals | PokemonPriceTracker (integrated — #101) |
 | Social media mentions | New: **Hype & Sentiment** | Reddit/YouTube APIs |
 | Sealed product prices | New: **Sealed Market** | Various |
 | Sales volume | Price & Market Signals | TCGPlayer affiliate |

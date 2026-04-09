@@ -340,7 +340,7 @@ defmodule Pokevestment.Ingestion.FullImport do
             |> SoldPrice.changeset(attrs)
             |> Repo.insert(
               on_conflict: :nothing,
-              conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+              conflict_target: [:card_id, :marketplace, :variant, :condition, :snapshot_date]
             )
           end)
 
@@ -350,7 +350,7 @@ defmodule Pokevestment.Ingestion.FullImport do
             |> ListingPrice.changeset(attrs)
             |> Repo.insert(
               on_conflict: :nothing,
-              conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+              conflict_target: [:card_id, :marketplace, :variant, :condition, :snapshot_date]
             )
           end)
 

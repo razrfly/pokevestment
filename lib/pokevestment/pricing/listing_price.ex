@@ -8,6 +8,7 @@ defmodule Pokevestment.Pricing.ListingPrice do
     field :marketplace, :string
     field :api_source, :string
     field :variant, :string
+    field :condition, :string, default: "aggregate"
     field :snapshot_date, :date
     field :currency_original, :string
     field :price_low, :decimal
@@ -29,7 +30,7 @@ defmodule Pokevestment.Pricing.ListingPrice do
   end
 
   @required_fields ~w(card_id marketplace api_source variant snapshot_date currency_original)a
-  @optional_fields ~w(price_low price_mid price_high price_direct_low price_low_usd price_mid_usd price_high_usd exchange_rate exchange_rate_date product_id source_updated_at metadata)a
+  @optional_fields ~w(condition price_low price_mid price_high price_direct_low price_low_usd price_mid_usd price_high_usd exchange_rate exchange_rate_date product_id source_updated_at metadata)a
 
   def changeset(listing_price, attrs) do
     listing_price
@@ -39,8 +40,11 @@ defmodule Pokevestment.Pricing.ListingPrice do
     |> validate_length(:api_source, max: 30)
     |> validate_length(:variant, max: 30)
     |> validate_length(:currency_original, max: 3)
+    |> validate_length(:condition, max: 30)
     |> validate_has_positive_price()
-    |> unique_constraint([:card_id, :marketplace, :variant, :snapshot_date])
+    |> unique_constraint([:card_id, :marketplace, :variant, :condition, :snapshot_date],
+      name: :listing_prices_card_mkt_var_cond_date_idx
+    )
     |> foreign_key_constraint(:card_id)
   end
 

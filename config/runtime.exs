@@ -27,6 +27,7 @@ config :pokevestment, PokevestmentWeb.Endpoint,
 # API key is optional for basic usage but recommended for higher rate limits
 # Register at https://pokemontcg.io to get an API key
 config :pokevestment, :pokemon_tcg_api_key, System.get_env("POKEMON_TCG_API_KEY")
+config :pokevestment, :pokemon_price_tracker_api_key, System.get_env("POKEMON_PRICE_TRACKER_API_KEY")
 
 if config_env() == :prod do
   database_url =
