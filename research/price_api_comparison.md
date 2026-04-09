@@ -17,7 +17,7 @@
 |--------|---------------|------------|------------------|---------------|-------------|------|---------|
 | **Pokemon TCG API** | ✅ Yes | ✅ TCGPlayer + CardMarket | 30 days (avg30) | ❌ Raw only | Daily | Free | **PRIMARY** |
 | **TCGdex** | ✅ Yes | ✅ TCGPlayer + CardMarket | 30 days | ❌ Raw only | Daily | Free | **BACKUP** |
-| Pokemon Price Tracker | ⚠️ Unknown | Claimed | 90+ days claimed | ✅ Claimed | Unknown | Unknown | **INVESTIGATE** |
+| **Pokemon Price Tracker** | ✅ Yes | ✅ TCGPlayer (condition-level) | 6 months (API plan) | ✅ eBay graded | Daily | $9.99/mo | **INTEGRATED (#101)** |
 | PokeTrace | ⚠️ Unknown | Unknown | Unknown | Unknown | Unknown | Unknown | **SKIP** |
 | TCGPlayer Direct | ❌ Affiliate only | N/A | N/A | N/A | N/A | Partner | **NOT AVAILABLE** |
 | CardMarket Direct | ❌ Affiliate only | N/A | N/A | N/A | N/A | Partner | **NOT AVAILABLE** |
@@ -124,19 +124,21 @@
 
 ---
 
-### 3. Pokemon Price Tracker ⚠️ NEEDS MORE RESEARCH
+### 3. Pokemon Price Tracker ✅ INTEGRATED (Issue #101)
 
-**Claimed Features** (from blueprint):
-- 90+ days historical price data
-- PSA graded prices
-- eBay sales data integration
+**API**: https://www.pokemonpricetracker.com/api-docs
+**Plan**: $9.99/mo (20,000 credits/day, 600,000/month)
+**Coverage**: 215 sets, 50,000+ cards — all Pokemon TCG sets including ME sets
 
-**Status**: Could not verify API access. Website exists but no public API documentation found.
+**Verified Features**:
+- TCGPlayer pricing with condition-level granularity (Near Mint, Lightly Played)
+- 6 months price history with daily volume counts (API plan)
+- eBay graded sales (PSA, BGS, CGC, ACE, TAG) with smart market prices
+- `externalCatalogId` matches our TCGdex card IDs exactly — zero mapping needed
+- Bearer token auth, 60 req/min, credit-based billing
 
-**Action Required**:
-- [ ] Create account and check for API access
-- [ ] Contact support about API availability
-- [ ] Evaluate if web scraping is viable/allowed
+**Status**: Integrated as third price source. API client at `Pokevestment.Api.PokemonPriceTracker`.
+Daily sync via `PptPriceSync` Oban worker at 7:15 AM UTC.
 
 ---
 

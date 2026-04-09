@@ -103,21 +103,21 @@ defmodule Pokevestment.Ingestion.DataQuality do
       Repo.query!(
         """
         WITH today_prices AS (
-          SELECT card_id, marketplace, variant, price_usd::float AS price
+          SELECT card_id, marketplace, variant, condition, price_usd::float AS price
           FROM sold_prices
           WHERE snapshot_date = $1
             AND price_usd IS NOT NULL AND price_usd > 0
         ),
         prev_prices AS (
-          SELECT DISTINCT ON (card_id, marketplace, variant)
-                 card_id, marketplace, variant, price_usd::float AS price
+          SELECT DISTINCT ON (card_id, marketplace, variant, condition)
+                 card_id, marketplace, variant, condition, price_usd::float AS price
           FROM sold_prices
           WHERE snapshot_date < $1
             AND price_usd IS NOT NULL AND price_usd > 0
-          ORDER BY card_id, marketplace, variant, snapshot_date DESC
+          ORDER BY card_id, marketplace, variant, condition, snapshot_date DESC
         )
         SELECT COUNT(*) FROM today_prices t
-        JOIN prev_prices p ON t.card_id = p.card_id AND t.marketplace = p.marketplace AND t.variant = p.variant
+        JOIN prev_prices p ON t.card_id = p.card_id AND t.marketplace = p.marketplace AND t.variant = p.variant AND t.condition = p.condition
         WHERE t.price > p.price * 5 OR t.price < p.price / 5
         """,
         [today]

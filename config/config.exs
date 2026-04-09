@@ -46,6 +46,8 @@ config :pokevestment, Oban,
        {"30 6 * * *", Pokevestment.Workers.CardDetailBackfill, queue: :ingestion},
        # Daily data quality check at 7 AM UTC (after prices, before tournaments)
        {"0 7 * * *", Pokevestment.Workers.DataQualityCheck},
+       # PPT price sync at 7:15 AM UTC (TCGPlayer data for priority sets)
+       {"15 7 * * *", Pokevestment.Workers.PptPriceSync, queue: :ingestion},
        # Daily tournament sync at 8 AM UTC
        {"0 8 * * *", Pokevestment.Workers.TournamentSync, queue: :ingestion},
        # Daily ML prediction pipeline at 9 AM UTC (after prices + tournaments)

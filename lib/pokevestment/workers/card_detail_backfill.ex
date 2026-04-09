@@ -218,7 +218,7 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
                  |> SoldPrice.changeset(attrs)
                  |> Repo.insert(
                    on_conflict: :nothing,
-                   conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+                   conflict_target: [:card_id, :marketplace, :variant, :condition, :snapshot_date]
                  ) do
               {:ok, _} -> :ok
               {:error, cs} ->
@@ -232,7 +232,7 @@ defmodule Pokevestment.Workers.CardDetailBackfill do
                  |> ListingPrice.changeset(attrs)
                  |> Repo.insert(
                    on_conflict: :nothing,
-                   conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+                   conflict_target: [:card_id, :marketplace, :variant, :condition, :snapshot_date]
                  ) do
               {:ok, _} -> :ok
               {:error, cs} ->

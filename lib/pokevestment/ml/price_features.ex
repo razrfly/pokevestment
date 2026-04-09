@@ -41,12 +41,14 @@ defmodule Pokevestment.ML.PriceFeatures do
         )
       ORDER BY sp.card_id, sp.snapshot_date DESC,
         CASE
-          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' THEN 1
-          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' THEN 2
-          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 3
-          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 4
-          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 5
-          ELSE 6
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' AND sp.condition = 'near-mint' THEN 1
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' AND sp.condition = 'aggregate' THEN 2
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' AND sp.condition = 'near-mint' THEN 3
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' AND sp.condition = 'aggregate' THEN 4
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 5
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 6
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 7
+          ELSE 8
         END
     ),
     rolling_avgs AS (
@@ -67,12 +69,14 @@ defmodule Pokevestment.ML.PriceFeatures do
         )
       ORDER BY sp.card_id, sp.snapshot_date DESC,
         CASE
-          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' THEN 1
-          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' THEN 2
-          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 3
-          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 4
-          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 5
-          ELSE 6
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' AND sp.condition = 'near-mint' THEN 1
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'normal' AND sp.condition = 'aggregate' THEN 2
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' AND sp.condition = 'near-mint' THEN 3
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'holofoil' AND sp.condition = 'aggregate' THEN 4
+          WHEN sp.marketplace = 'tcgplayer' AND sp.variant = 'reverse-holofoil' THEN 5
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'normal' THEN 6
+          WHEN sp.marketplace = 'cardmarket' AND sp.variant = 'reverse-holofoil' THEN 7
+          ELSE 8
         END
     )
     SELECT

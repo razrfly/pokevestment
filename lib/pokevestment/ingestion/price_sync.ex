@@ -180,7 +180,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
         {count, _} =
           Repo.insert_all(SoldPrice, Enum.reverse(rows),
             on_conflict: :nothing,
-            conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+            conflict_target: [:card_id, :marketplace, :variant, :condition, :snapshot_date]
           )
 
         count
@@ -221,7 +221,7 @@ defmodule Pokevestment.Ingestion.PriceSync do
         {count, _} =
           Repo.insert_all(ListingPrice, Enum.reverse(rows),
             on_conflict: :nothing,
-            conflict_target: [:card_id, :marketplace, :variant, :snapshot_date]
+            conflict_target: [:card_id, :marketplace, :variant, :condition, :snapshot_date]
           )
 
         count
