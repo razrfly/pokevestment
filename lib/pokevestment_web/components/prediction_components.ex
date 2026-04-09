@@ -194,19 +194,21 @@ defmodule PokevestmentWeb.PredictionComponents do
 
   def explanation_panel(assigns) do
     explanation = if is_map(assigns.explanation), do: assigns.explanation, else: %{}
+    summary = Map.get(explanation, "summary") || Map.get(explanation, :summary) || ""
     positive = get_reasons(explanation, "positive_reasons", :positive_reasons)
     negative = get_reasons(explanation, "negative_reasons", :negative_reasons)
 
     assigns =
       assigns
       |> assign(:explanation, explanation)
+      |> assign(:summary, summary)
       |> assign(:positive_reasons, positive)
       |> assign(:negative_reasons, negative)
 
     ~H"""
     <div class="space-y-3">
       <p class="text-sm font-medium text-olive-800 dark:text-olive-200">
-        {@explanation["summary"]}
+        {@summary}
       </p>
 
       <ul :if={@positive_reasons != []} class="space-y-1.5">
