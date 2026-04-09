@@ -77,8 +77,7 @@ defmodule Pokevestment.ML.ExplanationEngine do
 
       :bearish ->
         base = "This card appears overpriced at #{current} — fair value is #{fair}, #{gap} downside."
-        pos = sorted_drivers(Map.get(prediction, :top_positive_drivers, %{}), :desc)
-        case Enum.take(pos, 1) do
+        case Enum.take(top_pos, 1) do
           [{feature, _}] ->
             "#{base} #{FeatureDescriptions.label(feature)} provides some support."
           _ ->
